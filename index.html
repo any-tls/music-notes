@@ -179,13 +179,23 @@
         .screen {
             position: absolute;
             width: 100%; height: 100%;
+            background: rgba(0,0,0,0.95);
+            transition: opacity 0.5s;
+            pointer-events: auto;
+            /* Added scroll support */
+            overflow-y: auto;
+            -webkit-overflow-scrolling: touch;
+        }
+
+        /* Wrapper to keep content centered when not overflowing */
+        .screen-content {
             display: flex;
             flex-direction: column;
             justify-content: center;
             align-items: center;
-            background: rgba(0,0,0,0.95);
-            transition: opacity 0.5s;
-            pointer-events: auto;
+            min-height: 100%;
+            width: 100%;
+            padding: 40px 0; /* Padding to prevent content hitting edges */
         }
 
         .hidden {
@@ -361,61 +371,66 @@
     <div class="screen-container">
         
         <div id="title-screen" class="screen">
-            <img src="https://i.imgur.com/ujQpGlp.png" alt="Logo" class="title-logo">
-            <h1>ホロの音ゲー</h1>
-            <p>Made by Yytanuki</p>
-            <div id="loading-message">Loading Song List...</div>
-            
-            <div class="settings-group hidden" id="menu-content">
-                <div style="grid-column: 1 / -1;">
-                    <label>SELECT SONG</label>
-                    <div id="search-container">
-                        <input type="text" id="song-search" placeholder="Type to search..." autocomplete="off">
-                        <div id="song-list-scroll">
-                            </div>
+            <div class="screen-content">
+                <img src="https://i.imgur.com/ujQpGlp.png" alt="Logo" class="title-logo">
+                <h1>ホロの音ゲー</h1>
+                <p>Made by Yytanuki</p>
+                <div id="loading-message">Loading Song List...</div>
+                
+                <div class="settings-group hidden" id="menu-content">
+                    <div style="grid-column: 1 / -1;">
+                        <label>SELECT SONG</label>
+                        <div id="search-container">
+                            <input type="text" id="song-search" placeholder="Type to search..." autocomplete="off">
+                            <div id="song-list-scroll">
+                                </div>
+                        </div>
                     </div>
+                    <div>
+                        <label>DIFFICULTY</label>
+                        <select id="diff-select">
+                            <option value="0">EASY</option>
+                            <option value="1">NORMAL</option>
+                            <option value="2">HARD</option>
+                            <option value="3">EXPERT</option>
+                            <option value="4">MASTER</option>
+                        </select>
+                    </div>
+                    <div>
+                        <label>SPEED: <span id="speed-val">8.0</span></label>
+                        <input type="range" id="speed-range" min="1" max="15" step="0.5" value="8.0">
+                    </div>
+                    <button id="start-btn" class="btn" disabled>SELECT A SONG</button>
                 </div>
-                <div>
-                    <label>DIFFICULTY</label>
-                    <select id="diff-select">
-                        <option value="0">EASY</option>
-                        <option value="1">NORMAL</option>
-                        <option value="2">HARD</option>
-                        <option value="3">EXPERT</option>
-                        <option value="4">MASTER</option>
-                    </select>
+                    <div class="footer-container">
+                        <a href="https://x.com/TanukiYy" target="_blank" class="btn btn-footer">作者X</a>
+                        <a href="https://forms.gle/sM3ctNs1gpm1eiBBA" target="_blank" class="btn btn-footer">曲のリクエストやバグ報告、お問い合わせなど</a>
+                    </div>
+                <div class="footer-container2">
+                       <p>音源や映像はすべてYouTubeから埋め込まれています。</p>
                 </div>
-                <div>
-                    <label>SPEED: <span id="speed-val">8.0</span></label>
-                    <input type="range" id="speed-range" min="1" max="15" step="0.5" value="8.0">
-                </div>
-                <button id="start-btn" class="btn" disabled>SELECT A SONG</button>
             </div>
-                <div class="footer-container">
-                    <a href="https://x.com/TanukiYy" target="_blank" class="btn btn-footer">作者X</a>
-                    <a href="https://forms.gle/sM3ctNs1gpm1eiBBA" target="_blank" class="btn btn-footer">曲のリクエストやバグ報告、お問い合わせなど</a>
-                </div>
-            <div class="footer-container2">
-                   <p>音源や映像はすべてYouTubeから埋め込まれています。<br>当サイトは非公式ファンサイトです。</p>
-            </div>
-
         </div>
 
         <div id="loading-screen" class="screen hidden">
-            <h2>LOADING DATA...</h2>
+            <div class="screen-content">
+                <h2>LOADING DATA...</h2>
+            </div>
         </div>
 
         <div id="result-screen" class="screen hidden">
-            <h2 id="res-title" style="font-size:3rem; margin-bottom:10px;">FULL COMBO!</h2>
-            <div style="font-size:1.5rem;">SCORE: <span id="result-score">0</span></div>
-            <div style="font-size:1.2rem; margin:10px;">MAX COMBO: <span id="result-combo">0</span></div>
-            <div style="display:grid; grid-template-columns: 1fr 1fr; gap:15px; text-align:left; margin:20px; background:rgba(255,255,255,0.1); padding:20px; border-radius:10px;">
-                <div class="judge-perfect">PERFECT</div><div id="res-perf">0</div>
-                <div class="judge-great">GREAT</div><div id="res-great">0</div>
-                <div class="judge-good">GOOD</div><div id="res-good">0</div>
-                <div class="judge-miss">MISS</div><div id="res-miss">0</div>
+            <div class="screen-content">
+                <h2 id="res-title" style="font-size:3rem; margin-bottom:10px;">FULL COMBO!</h2>
+                <div style="font-size:1.5rem;">SCORE: <span id="result-score">0</span></div>
+                <div style="font-size:1.2rem; margin:10px;">MAX COMBO: <span id="result-combo">0</span></div>
+                <div style="display:grid; grid-template-columns: 1fr 1fr; gap:15px; text-align:left; margin:20px; background:rgba(255,255,255,0.1); padding:20px; border-radius:10px;">
+                    <div class="judge-perfect">PERFECT</div><div id="res-perf">0</div>
+                    <div class="judge-great">GREAT</div><div id="res-great">0</div>
+                    <div class="judge-good">GOOD</div><div id="res-good">0</div>
+                    <div class="judge-miss">MISS</div><div id="res-miss">0</div>
+                </div>
+                <button class="btn" onclick="game.returnToTitle()">BACK TO TITLE</button>
             </div>
-            <button class="btn" onclick="game.returnToTitle()">BACK TO TITLE</button>
         </div>
     </div>
 
