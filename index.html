@@ -196,6 +196,13 @@
 
         h1 { font-style: italic; text-transform: uppercase; letter-spacing: 2px; text-shadow: 0 0 10px var(--primary); margin: 0 0 20px 0; font-size: 3rem; }
 
+        /* New Logo Style */
+        .title-logo {
+            max-width: 100px;
+            height: auto;
+            margin-bottom: 10px;
+        }
+
         .btn {
             background: linear-gradient(45deg, var(--primary), #2a9d8f);
             border: 2px solid #fff;
@@ -211,6 +218,7 @@
             margin: 10px;
             display: inline-block;
             text-align: center;
+            text-decoration: none;
         }
         .btn:active { transform: scale(0.95); }
         .btn:disabled { background: #555; box-shadow: none; cursor: not-allowed; opacity: 0.7; }
@@ -224,6 +232,32 @@
             width: 90%;
             max-width: 500px;
             backdrop-filter: blur(5px);
+        }
+
+        /* Footer Style */
+        .footer-container {
+            margin-top: 20px;
+            display: flex;
+            gap: 10px;
+            justify-content: center;
+        }
+
+        .btn-footer {
+            padding: 8px 20px;
+            font-size: 0.9rem;
+            background: rgba(255, 255, 255, 0.1);
+            border: 1px solid var(--primary);
+            box-shadow: none;
+        }
+        .btn-footer:hover {
+            background: var(--primary);
+            color: #000;
+        }
+        .footer-container2 {
+            margin-top: 20px;
+            display: flex;
+            gap: 10px;
+            justify-content: center;
         }
 
         label { display: block; margin-bottom: 5px; font-weight: bold; color: var(--primary); }
@@ -292,8 +326,7 @@
         #loading-message { font-size: 1.2rem; color: var(--primary); animation: blink 1s infinite; }
         @keyframes blink { 50% { opacity: 0.5; } }
     </style>
-    <!-- Google tag (gtag.js) -->
-<script async src="https://www.googletagmanager.com/gtag/js?id=G-RV7D701RFJ"></script>
+    <script async src="https://www.googletagmanager.com/gtag/js?id=G-RV7D701RFJ"></script>
 <script>
   window.dataLayer = window.dataLayer || [];
   function gtag(){dataLayer.push(arguments);}
@@ -328,7 +361,9 @@
     <div class="screen-container">
         
         <div id="title-screen" class="screen">
+            <img src="https://i.imgur.com/ujQpGlp.png" alt="Logo" class="title-logo">
             <h1>ホロの音ゲー</h1>
+            <p>Made by Yytanuki</p>
             <div id="loading-message">Loading Song List...</div>
             
             <div class="settings-group hidden" id="menu-content">
@@ -356,6 +391,14 @@
                 </div>
                 <button id="start-btn" class="btn" disabled>SELECT A SONG</button>
             </div>
+                <div class="footer-container">
+                    <a href="https://x.com/TanukiYy" target="_blank" class="btn btn-footer">作者X</a>
+                    <a href="https://forms.gle/sM3ctNs1gpm1eiBBA" target="_blank" class="btn btn-footer">曲のリクエストやバグ報告、お問い合わせなど</a>
+                </div>
+            <div class="footer-container2">
+                   <p>音源や映像はすべてYouTubeから埋め込まれています。</p>
+            </div>
+
         </div>
 
         <div id="loading-screen" class="screen hidden">
@@ -593,7 +636,7 @@ class RhythmGame {
         }
     }
 
-    // --- Game Logic (Unchanged) ---
+    // --- Game Logic ---
 
     resize() {
         this.canvas.width = window.innerWidth;
