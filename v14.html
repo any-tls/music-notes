@@ -11,7 +11,6 @@
             --primary: #39c5bb; /* PJ Sekai Cyan */
             --accent: #ff0055;
             --bg: #121212;
-            --lane-bg: rgba(0, 20, 30, 0.6);
             --text: #ffffff;
         }
 
@@ -19,7 +18,7 @@
             box-sizing: border-box;
             user-select: none;
             -webkit-user-select: none;
-            -webkit-touch-callout: none; /* iOS Safari Long Press Menu Disable */
+            -webkit-touch-callout: none;
         }
 
         body, html {
@@ -33,7 +32,7 @@
             color: var(--text);
         }
 
-        /* --- Layers --- */
+        /* --- LAYER 0: Background --- */
         #background-layer {
             position: absolute;
             top: 0;
@@ -62,6 +61,7 @@
             opacity: 0.5;
         }
 
+        /* --- LAYER 10: Game Canvas --- */
         #game-layer {
             position: absolute;
             top: 0;
@@ -71,6 +71,7 @@
             z-index: 10;
         }
 
+        /* --- LAYER 20: In-Game UI (HUD) --- */
         #ui-layer {
             position: absolute;
             top: 0;
@@ -78,10 +79,20 @@
             width: 100%;
             height: 100%;
             z-index: 20;
-            pointer-events: none; /* Let clicks pass through to game except buttons */
+            pointer-events: none; /* Allows clicks to pass through to game/screens if needed */
         }
 
-        /* --- Screens --- */
+        /* --- LAYER 100: Menus & Screens (Topmost) --- */
+        .screen-container {
+            position: absolute;
+            top: 0;
+            left: 0;
+            width: 100%;
+            height: 100%;
+            z-index: 100;
+            pointer-events: none; /* Allow seeing game behind, but children will have events */
+        }
+
         .screen {
             position: absolute;
             width: 100%;
@@ -92,28 +103,23 @@
             align-items: center;
             background: rgba(0,0,0,0.85);
             transition: opacity 0.5s;
-            pointer-events: auto;
+            pointer-events: auto; /* Enable clicks on screens */
         }
 
         .hidden {
             opacity: 0;
-            pointer-events: none;
-            z-index: -1;
+            pointer-events: none !important;
+            visibility: hidden;
         }
 
-        /* --- Title Screen --- */
+        /* --- UI Components --- */
+        h1 { font-style: italic; text-transform: uppercase; letter-spacing: 2px; text-shadow: 0 0 10px var(--primary); margin: 0 0 20px 0; }
+
         #logo-img {
             max-width: 300px;
             margin-bottom: 20px;
-        }
-        
-        h1 { font-style: italic; text-transform: uppercase; letter-spacing: 2px; text-shadow: 0 0 10px var(--primary); }
-
-        .file-input-wrapper {
-            margin: 20px;
-            position: relative;
-            overflow: hidden;
-            display: inline-block;
+            max-height: 100px;
+            object-fit: contain;
         }
 
         .btn {
@@ -127,25 +133,22 @@
             cursor: pointer;
             text-transform: uppercase;
             box-shadow: 0 0 15px var(--primary);
-            transition: transform 0.1s;
+            transition: transform 0.1s, background 0.2s;
             margin: 10px;
             pointer-events: auto;
+            display: inline-block;
+            text-align: center;
         }
 
         .btn:active { transform: scale(0.95); }
-        .btn:disabled { background: #555; box-shadow: none; cursor: not-allowed; }
+        .btn:disabled { background: #555; box-shadow: none; cursor: not-allowed; opacity: 0.7; }
 
-        input[type=file] {
-            font-size: 100px;
-            position: absolute;
-            left: 0;
-            top: 0;
-            opacity: 0;
-        }
+        /* Hidden File Input */
+        #file-input { display: none; }
 
         .settings-group {
             background: rgba(255,255,255,0.1);
-            padding: 15px;
+            padding: 20px;
             border-radius: 10px;
             margin: 10px;
             text-align: center;
@@ -153,29 +156,34 @@
             max-width: 500px;
         }
 
-        label { display: block; margin-bottom: 5px; font-weight: bold; }
+        label { display: block; margin-bottom: 5px; font-weight: bold; color: var(--primary); }
+        
         select, input[type=range] {
             width: 100%;
             padding: 10px;
-            margin-bottom: 10px;
+            margin-bottom: 15px;
             background: #222;
             color: white;
             border: 1px solid var(--primary);
             border-radius: 5px;
+            font-family: inherit;
+            font-size: 1rem;
+            pointer-events: auto;
         }
 
-        /* --- Game UI --- */
+        /* --- HUD --- */
         #hud-top {
             position: absolute;
             top: 0;
             left: 0;
             width: 100%;
-            height: 60px;
+            height: 70px;
             display: flex;
             justify-content: space-between;
             align-items: center;
             padding: 0 20px;
             background: linear-gradient(to bottom, rgba(0,0,0,0.8), transparent);
+            pointer-events: none;
         }
 
         .life-bar-container {
@@ -191,7 +199,7 @@
         #life-bar {
             width: 100%;
             height: 100%;
-            background: #4caf50; /* Green */
+            background: #4caf50;
             transition: width 0.2s, background 0.2s;
         }
 
@@ -199,22 +207,37 @@
             font-size: 1.5rem;
             font-weight: 900;
             text-align: right;
+            text-shadow: 2px 2px 0px #000;
         }
 
+        #pause-btn {
+            pointer-events: auto;
+            background: rgba(0,0,0,0.5);
+            border: 1px solid white;
+            width: 40px;
+            height: 40px;
+            border-radius: 5px;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            font-weight: bold;
+            cursor: pointer;
+            z-index: 200; /* Ensure pause is clickable */
+        }
+
+        /* --- Gameplay Visuals --- */
         #combo-container {
             position: absolute;
             top: 30%;
             left: 50%;
             transform: translate(-50%, -50%);
             text-align: center;
-            pointer-events: none;
-            display: none; /* JS will show */
+            display: none;
         }
 
         #combo-count {
             font-size: 4rem;
             font-weight: 900;
-            color: #fff;
             background: linear-gradient(to bottom, #fff, var(--primary));
             -webkit-background-clip: text;
             -webkit-text-fill-color: transparent;
@@ -244,25 +267,20 @@
         .judge-good { color: #2196f3; }
         .judge-miss { color: #9e9e9e; }
 
-        /* Pause Button */
-        #pause-btn {
+        /* --- Touch Input Zones --- */
+        #input-zones {
             position: absolute;
-            top: 10px;
-            right: 20px; /* Adjusted to not overlap score too much if mobile */
-            z-index: 100;
-            background: rgba(0,0,0,0.5);
-            border: 1px solid white;
-            width: 40px;
-            height: 40px;
-            border-radius: 5px;
+            bottom: 0;
+            left: 0;
+            width: 100%;
+            height: 35%; 
             display: flex;
-            align-items: center;
-            justify-content: center;
-            font-weight: bold;
+            z-index: 50; /* Above UI, Below Screens */
             pointer-events: auto;
         }
+        .zone { flex: 1; }
 
-        /* --- Loading --- */
+        /* Loading Bar */
         #loading-bar-container {
             width: 60%;
             height: 5px;
@@ -271,18 +289,11 @@
         }
         #loading-bar { width: 0%; height: 100%; background: var(--primary); transition: width 0.1s; }
 
-        /* Input Zone overlay for touch debug (optional, keeping invisible) */
-        #input-zones {
-            position: absolute;
-            bottom: 0;
-            left: 0;
-            width: 100%;
-            height: 30%; /* Bottom 30% is touch area */
-            display: flex;
-            z-index: 15;
+        /* Responsive Fixes */
+        @media (orientation: landscape) {
+            .settings-group { display: grid; grid-template-columns: 1fr 1fr; gap: 10px; width: 80%; }
+            select, input[type=range] { margin-bottom: 5px; }
         }
-        .zone { flex: 1; /* border: 1px solid rgba(255,255,255,0.1); */ }
-
     </style>
 </head>
 <body>
@@ -296,10 +307,8 @@
 
     <div id="ui-layer">
         <div id="hud-top" class="hidden">
-            <div class="life-bar-container">
-                <div id="life-bar"></div>
-            </div>
-            <div id="pause-btn" onclick="game.togglePause()">||</div>
+            <div class="life-bar-container"><div id="life-bar"></div></div>
+            <div id="pause-btn">||</div>
             <div class="score-display">SCORE: <span id="score-val">0</span></div>
         </div>
 
@@ -308,92 +317,93 @@
             <div id="combo-label">COMBO</div>
         </div>
         <div id="judge-display">PERFECT</div>
-        
-        <div id="input-zones">
-            <div class="zone" data-lane="0"></div>
-            <div class="zone" data-lane="1"></div>
-            <div class="zone" data-lane="2"></div>
-            <div class="zone" data-lane="3"></div>
-        </div>
     </div>
 
-    <div id="title-screen" class="screen">
-        <img src="https://example.com/logo.png" alt="GAME LOGO" id="logo-img" onerror="this.style.display='none'">
-        <h1>AI RHYTHM</h1>
-        
-        <div class="settings-group">
-            <div class="file-input-wrapper btn">
-                SELECT FILE (Audio/Video)
-                <input type="file" id="file-input" accept="audio/*,video/*">
-            </div>
-            <div id="file-name" style="margin-top:5px; font-size:0.9rem; color:#aaa;">No file selected</div>
-        </div>
+    <div id="input-zones">
+        <div class="zone" data-lane="0"></div>
+        <div class="zone" data-lane="1"></div>
+        <div class="zone" data-lane="2"></div>
+        <div class="zone" data-lane="3"></div>
+    </div>
 
-        <div class="settings-group">
-            <label>DIFFICULTY</label>
-            <select id="diff-select">
-                <option value="0">EASY</option>
-                <option value="1">NORMAL</option>
-                <option value="2">HARD</option>
-                <option value="3">EXPERT</option>
-                <option value="4">MASTER</option>
-            </select>
+    <div class="screen-container">
+        
+        <div id="title-screen" class="screen">
+            <img src="https://example.com/logo.png" alt="GAME LOGO" id="logo-img" onerror="this.style.display='none'">
+            <h1>AI RHYTHM</h1>
             
-            <label>NOTE SPEED: <span id="speed-val">6.0</span></label>
-            <input type="range" id="speed-range" min="1" max="12" step="0.5" value="6.0">
+            <div class="settings-group">
+                <div style="grid-column: 1 / -1;">
+                    <label>MUSIC FILE</label>
+                    <button class="btn" id="file-select-btn" style="width: 100%; margin:0 0 10px 0;">SELECT FILE (Audio/Video)</button>
+                    <input type="file" id="file-input" accept="audio/*,video/*">
+                    <div id="file-name" style="font-size:0.9rem; color:#aaa; margin-bottom:10px;">No file selected</div>
+                </div>
+
+                <div>
+                    <label>DIFFICULTY</label>
+                    <select id="diff-select">
+                        <option value="0">EASY</option>
+                        <option value="1">NORMAL</option>
+                        <option value="2">HARD</option>
+                        <option value="3">EXPERT</option>
+                        <option value="4">MASTER</option>
+                    </select>
+                </div>
+                
+                <div>
+                    <label>SPEED: <span id="speed-val">6.0</span></label>
+                    <input type="range" id="speed-range" min="1" max="12" step="0.5" value="6.0">
+                </div>
+            </div>
+
+            <button id="start-btn" class="btn" disabled>GAME START</button>
         </div>
 
-        <button id="start-btn" class="btn" disabled>GAME START</button>
-    </div>
-
-    <div id="loading-screen" class="screen hidden">
-        <h2>ANALYZING MUSIC...</h2>
-        <div id="loading-text">Generating Chart</div>
-        <div id="loading-bar-container"><div id="loading-bar"></div></div>
-    </div>
-
-    <div id="result-screen" class="screen hidden">
-        <h2 style="font-size:3rem; margin-bottom:10px;">FULL COMBO!</h2>
-        <div style="font-size:1.5rem;">SCORE: <span id="result-score">0</span></div>
-        <div style="font-size:1.2rem; margin:10px;">MAX COMBO: <span id="result-combo">0</span></div>
-        <div style="display:grid; grid-template-columns: 1fr 1fr; gap:10px; text-align:left; margin:20px;">
-            <div>PERFECT</div><div id="res-perf">0</div>
-            <div>GREAT</div><div id="res-great">0</div>
-            <div>GOOD</div><div id="res-good">0</div>
-            <div>MISS</div><div id="res-miss">0</div>
+        <div id="loading-screen" class="screen hidden">
+            <h2>ANALYZING...</h2>
+            <div id="loading-text">Generating Chart</div>
+            <div id="loading-bar-container"><div id="loading-bar"></div></div>
         </div>
-        <button class="btn" onclick="location.reload()">BACK TO TITLE</button>
+
+        <div id="result-screen" class="screen hidden">
+            <h2 id="res-title" style="font-size:3rem; margin-bottom:10px;">FULL COMBO!</h2>
+            <div style="font-size:1.5rem;">SCORE: <span id="result-score">0</span></div>
+            <div style="font-size:1.2rem; margin:10px;">MAX COMBO: <span id="result-combo">0</span></div>
+            <div style="display:grid; grid-template-columns: 1fr 1fr; gap:15px; text-align:left; margin:20px; background:rgba(255,255,255,0.1); padding:20px; border-radius:10px;">
+                <div class="judge-perfect">PERFECT</div><div id="res-perf">0</div>
+                <div class="judge-great">GREAT</div><div id="res-great">0</div>
+                <div class="judge-good">GOOD</div><div id="res-good">0</div>
+                <div class="judge-miss">MISS</div><div id="res-miss">0</div>
+            </div>
+            <button class="btn" onclick="location.reload()">BACK TO TITLE</button>
+        </div>
+
     </div>
 
 <script>
 /**
  * AI RHYTHM GAME LOGIC
- * Single File Implementation
  */
 
-// --- Constants & Config ---
+// --- Constants ---
 const LANES = 4;
-const LOOKAHEAD = 3.0; // Seconds of notes to draw
-const JUDGE_LINE_Y = 0.85; // % of screen height
-const PERFECT_WINDOW = 0.050; // 50ms
+const LOOKAHEAD = 3.0; 
+const JUDGE_LINE_Y = 0.8;
+const PERFECT_WINDOW = 0.050;
 const GREAT_WINDOW = 0.100;
 const GOOD_WINDOW = 0.180;
 
-// Pseudo Random Number Generator for Deterministic Charts
+// PRNG
 class PseudoRandom {
     constructor(seed) {
         this.seed = seed % 2147483647;
         if (this.seed <= 0) this.seed += 2147483646;
     }
-    next() {
-        return this.seed = this.seed * 16807 % 2147483647;
-    }
-    nextFloat() {
-        return (this.next() - 1) / 2147483646;
-    }
+    next() { return this.seed = this.seed * 16807 % 2147483647; }
+    nextFloat() { return (this.next() - 1) / 2147483646; }
 }
 
-// --- Main Game Class ---
 class RhythmGame {
     constructor() {
         this.audioCtx = null;
@@ -402,34 +412,27 @@ class RhythmGame {
         this.analyser = null;
         this.videoEl = document.getElementById('background-video');
         
-        this.notes = []; // { time, lane, type, length, processed }
+        this.notes = [];
         this.score = 0;
         this.combo = 0;
         this.maxCombo = 0;
         this.life = 1000;
         this.isPlaying = false;
         this.startTime = 0;
-        this.pauseTime = 0;
         this.noteSpeed = 6.0;
-        this.difficulty = 1; // 0-4
+        this.difficulty = 1;
         
         this.stats = { perfect:0, great:0, good:0, miss:0 };
-        
-        // Input State
         this.keyMap = { 'KeyD':0, 'KeyF':1, 'KeyJ':2, 'KeyK':3 };
-        this.laneState = [false, false, false, false]; // Is lane currently held?
+        this.laneState = [false, false, false, false];
         
-        // Setup Renderer
         this.canvas = document.getElementById('game-layer');
         this.ctx = this.canvas.getContext('2d');
-        
-        // Visualizer
         this.visCanvas = document.getElementById('visualizer-canvas');
         this.visCtx = this.visCanvas.getContext('2d');
         
         this.resize();
         window.addEventListener('resize', () => this.resize());
-        
         this.bindInputs();
     }
 
@@ -465,42 +468,54 @@ class RhythmGame {
         const zones = document.querySelectorAll('.zone');
         zones.forEach(z => {
             z.addEventListener('touchstart', (e) => {
-                e.preventDefault();
+                // Prevent default mostly to stop scroll, but allowing UI clicks is handled by z-index
+                e.preventDefault(); 
                 if (!this.isPlaying) return;
-                this.triggerInput(parseInt(z.dataset.lane), 'down');
-                this.laneState[parseInt(z.dataset.lane)] = true;
+                const lane = parseInt(z.dataset.lane);
+                this.triggerInput(lane, 'down');
+                this.laneState[lane] = true;
+                // Visual feedback immediate
+                this.drawLaneFeedback(lane, true);
             });
             z.addEventListener('touchend', (e) => {
                 e.preventDefault();
                 if (!this.isPlaying) return;
-                this.triggerInput(parseInt(z.dataset.lane), 'up');
-                this.laneState[parseInt(z.dataset.lane)] = false;
+                const lane = parseInt(z.dataset.lane);
+                this.triggerInput(lane, 'up');
+                this.laneState[lane] = false;
             });
         });
+
+        // Pause Button
+        document.getElementById('pause-btn').addEventListener('click', () => this.togglePause());
     }
 
     async loadFile(file) {
         document.getElementById('title-screen').classList.add('hidden');
         document.getElementById('loading-screen').classList.remove('hidden');
 
-        this.audioCtx = new (window.AudioContext || window.webkitAudioContext)();
+        // Initialize AudioContext on user interaction
+        if (!this.audioCtx) {
+            this.audioCtx = new (window.AudioContext || window.webkitAudioContext)();
+        }
+        if (this.audioCtx.state === 'suspended') {
+            await this.audioCtx.resume();
+        }
         
-        // Setup Media
         const url = URL.createObjectURL(file);
         const isVideo = file.type.startsWith('video');
 
         if (isVideo) {
             this.videoEl.src = url;
             this.videoEl.style.display = 'block';
-            this.videoEl.load(); // Prepare video
+            this.videoEl.load();
         } else {
             this.videoEl.style.display = 'none';
         }
 
-        // Decode Audio for Analysis
         const arrayBuffer = await file.arrayBuffer();
         
-        // Generate seed from file props
+        // Seed generation
         const seedStr = file.name + file.size;
         let seedVal = 0;
         for (let i=0; i<seedStr.length; i++) seedVal += seedStr.charCodeAt(i);
@@ -512,55 +527,50 @@ class RhythmGame {
             this.generateChart(this.audioBuffer, seedVal);
             this.startGame();
         } catch (e) {
-            alert("Error decoding audio: " + e);
+            alert("Error decoding audio. Please try another file.");
             location.reload();
         }
     }
 
     generateChart(buffer, seed) {
-        document.getElementById('loading-text').innerText = "Generating AI Chart...";
+        document.getElementById('loading-text').innerText = "Generating Pattern...";
         this.notes = [];
         const rawData = buffer.getChannelData(0);
         const sampleRate = buffer.sampleRate;
         const rng = new PseudoRandom(seed);
         
-        // Parameters based on difficulty
-        // Easy(0) -> Master(4)
         const d = this.difficulty;
-        const thresholdBase = [0.15, 0.12, 0.08, 0.05, 0.03][d]; 
-        const minStep = [0.5, 0.4, 0.25, 0.15, 0.1][d]; // Minimum time between notes per lane
-        const density = [0.3, 0.5, 0.7, 0.9, 1.0][d]; // Chance to spawn note on peak
+        // Tuning logic
+        const thresholdBase = [0.15, 0.12, 0.10, 0.06, 0.04][d]; 
+        const minStep = [0.5, 0.4, 0.25, 0.15, 0.1][d]; 
+        const density = [0.3, 0.5, 0.7, 0.9, 1.0][d]; 
         
-        // Simple Peak Detection
-        const windowSize = Math.floor(sampleRate * 0.05); // 50ms window
+        const windowSize = Math.floor(sampleRate * 0.05);
         let lastNoteTime = -1;
         
         for (let i = 0; i < rawData.length; i += windowSize) {
             let sum = 0;
-            for (let j = 0; j < windowSize; j++) {
+            // Quick RMS approximation
+            for (let j = 0; j < windowSize; j+=4) { // Optimization: skip samples
                 if (i+j < rawData.length) sum += Math.abs(rawData[i+j]);
             }
-            const avg = sum / windowSize;
-            
-            // Current Time
+            const avg = sum / (windowSize/4);
             const time = i / sampleRate;
 
             if (avg > thresholdBase) {
-                if (time - lastNoteTime < minStep) continue; // Too fast
+                if (time - lastNoteTime < minStep) continue;
 
                 if (rng.nextFloat() < density) {
-                    // Create Note
                     const lane = Math.floor(rng.nextFloat() * LANES);
                     let type = 'tap';
                     let length = 0;
 
-                    // Random Long Notes & Flicks (Higher diff = more complex)
                     const rType = rng.nextFloat();
                     if (rType < 0.1 + (d*0.05)) {
                         type = 'flick';
                     } else if (rType > 0.85 - (d*0.05)) {
                         type = 'long';
-                        length = 0.5 + rng.nextFloat() * 1.5; // 0.5s to 2.0s hold
+                        length = 0.5 + rng.nextFloat() * 1.5;
                     }
 
                     this.notes.push({
@@ -576,33 +586,31 @@ class RhythmGame {
             }
         }
         
-        // Sort notes by time just in case
         this.notes.sort((a,b) => a.time - b.time);
-        
-        // Add end trigger
         this.notes.push({ time: buffer.duration + 2, lane: 0, type: 'end', length:0 });
     }
 
     startGame() {
         document.getElementById('loading-screen').classList.add('hidden');
         document.getElementById('hud-top').classList.remove('hidden');
+        document.getElementById('input-zones').style.display = 'flex'; // Enable touch zones
         
-        // Audio Source
         this.sourceNode = this.audioCtx.createBufferSource();
         this.sourceNode.buffer = this.audioBuffer;
         
-        // Analyser for Visualizer
         this.analyser = this.audioCtx.createAnalyser();
         this.analyser.fftSize = 256;
         
         this.sourceNode.connect(this.analyser);
         this.analyser.connect(this.audioCtx.destination);
         
-        this.startTime = this.audioCtx.currentTime;
-        this.sourceNode.start(0);
+        this.startTime = this.audioCtx.currentTime + 1.0; // 1s start delay
+        this.sourceNode.start(this.startTime);
+        
         if (this.videoEl.style.display !== 'none') {
             this.videoEl.currentTime = 0;
-            this.videoEl.play();
+            // Sync video start
+            setTimeout(() => this.videoEl.play(), 1000);
         }
 
         this.isPlaying = true;
@@ -611,8 +619,6 @@ class RhythmGame {
 
     togglePause() {
         if (!this.isPlaying) return;
-        // Simplified pause: just reload for this demo or stop logic
-        // Proper pause requires suspending AudioContext and tracking offset
         if (this.audioCtx.state === 'running') {
             this.audioCtx.suspend();
             if(this.videoEl) this.videoEl.pause();
@@ -625,18 +631,14 @@ class RhythmGame {
     triggerInput(lane, action) {
         const now = this.getCurrentTime();
         
-        // Find closest hittable note in lane
-        // Filter active notes
         const hittable = this.notes.filter(n => 
             !n.hit && 
             n.lane === lane && 
             n.type !== 'end' &&
-            Math.abs(n.time - now) < GOOD_WINDOW + n.length // Check start or within hold
+            Math.abs(n.time - now) < GOOD_WINDOW + n.length
         );
 
         if (hittable.length === 0) return;
-
-        // Sort by proximity
         hittable.sort((a,b) => Math.abs(a.time - now) - Math.abs(b.time - now));
         const note = hittable[0];
 
@@ -644,15 +646,13 @@ class RhythmGame {
             if (note.type === 'tap' || note.type === 'flick') {
                 this.judge(note, now);
             } else if (note.type === 'long') {
-                // Check start of long note
                 if (Math.abs(note.time - now) < GOOD_WINDOW) {
                     note.holding = true;
-                    this.showJudge('PERFECT'); // Visual feedback for start
+                    this.showJudge('PERFECT');
                 }
             }
         } else if (action === 'up') {
             if (note.type === 'long' && note.holding) {
-                // Judge release
                 const releaseTime = note.time + note.length;
                 this.judge(note, now, releaseTime);
             }
@@ -672,7 +672,7 @@ class RhythmGame {
             note.hit = true;
             this.addScore(grade);
         } else {
-            note.hit = true; // Count as processed but missed
+            note.hit = true;
             this.breakCombo();
         }
     }
@@ -681,7 +681,6 @@ class RhythmGame {
         this.combo++;
         if(this.combo > this.maxCombo) this.maxCombo = this.combo;
         
-        // Score calc
         let base = 500;
         if(grade === 'PERFECT') base = 1000;
         if(grade === 'GREAT') base = 800;
@@ -690,14 +689,11 @@ class RhythmGame {
         this.score += base * (1 + this.combo * 0.01);
         this.score = Math.floor(this.score);
         
-        // Update Stats
         if(grade==='PERFECT') this.stats.perfect++;
         if(grade==='GREAT') this.stats.great++;
         if(grade==='GOOD') this.stats.good++;
 
-        // Life recover
-        this.life = Math.min(1000, this.life + 20);
-
+        this.life = Math.min(1000, this.life + 10);
         this.showJudge(grade);
         this.updateHUD();
     }
@@ -705,7 +701,7 @@ class RhythmGame {
     breakCombo() {
         this.combo = 0;
         this.stats.miss++;
-        this.life = Math.max(0, this.life - 100); // Don't die, just reduce
+        this.life = Math.max(0, this.life - 60);
         this.showJudge('MISS');
         this.updateHUD();
     }
@@ -716,9 +712,8 @@ class RhythmGame {
         el.innerText = text;
         el.classList.add('judge-' + text.toLowerCase());
         
-        // Animation reset
         el.style.animation = 'none';
-        el.offsetHeight; /* trigger reflow */
+        el.offsetHeight; 
         el.style.animation = 'pop 0.3s forwards';
         el.style.opacity = 1;
 
@@ -748,16 +743,16 @@ class RhythmGame {
 
     endGame() {
         this.isPlaying = false;
-        this.sourceNode.stop();
+        try { this.sourceNode.stop(); } catch(e){}
         if(this.videoEl) this.videoEl.pause();
         
-        document.getElementById('ui-layer').style.display = 'none';
+        document.getElementById('ui-layer').classList.add('hidden'); // Hide HUD
+        document.getElementById('hud-top').classList.add('hidden');
+        document.getElementById('input-zones').style.display = 'none';
         document.getElementById('result-screen').classList.remove('hidden');
         
-        // Fill Result
-        if (this.stats.miss === 0) document.querySelector('#result-screen h2').innerText = "FULL COMBO!";
-        else document.querySelector('#result-screen h2').innerText = "FINISH";
-
+        const title = this.stats.miss === 0 ? "FULL COMBO!" : "FINISH";
+        document.getElementById('res-title').innerText = title;
         document.getElementById('result-score').innerText = this.score;
         document.getElementById('result-combo').innerText = this.maxCombo;
         document.getElementById('res-perf').innerText = this.stats.perfect;
@@ -766,60 +761,51 @@ class RhythmGame {
         document.getElementById('res-miss').innerText = this.stats.miss;
     }
 
-    // --- RENDER LOOP ---
+    // --- RENDER ---
     loop() {
         if (!this.isPlaying) return;
         requestAnimationFrame(() => this.loop());
 
         const now = this.getCurrentTime();
-        
-        // Draw Visualizer
         this.drawVisualizer();
 
-        // Clear Game Layer
+        // Clear Canvas
         this.ctx.clearRect(0,0, this.canvas.width, this.canvas.height);
 
-        // Perspective Settings
+        // Perspective Math
         const w = this.canvas.width;
         const h = this.canvas.height;
-        const laneWidth = Math.min(w * 0.9, 500); // Total track width
-        const lw = laneWidth / 4; // Single lane width
+        const laneWidth = Math.min(w * 0.9, 500);
+        const lw = laneWidth / 4;
         const trackX = (w - laneWidth) / 2;
         
-        // Pseudo-3D Projection
-        // Z=0 is bottom (player), Z=1 is horizon
         const project = (x, z) => {
-            const scale = 1 / (z + 1); // Simple perspective divisor
-            const x2D = w/2 + (x - w/2) * scale;
-            const y2D = h * JUDGE_LINE_Y - (h * 0.6 * z * scale); // Horizon at ~25% height
-            // Actually, let's do standard rhythm game perspective
-            // Top of track is narrow, Bottom is wide
-            // Let's create a trapezoid visually
-            const vanishingY = h * 0.2;
-            const playerY = h * JUDGE_LINE_Y;
+            // z: 0 (near) -> 1 (far)
+            // Vanishing point y: 0.2h, Player y: JUDGE_LINE_Y * h
+            const nearY = h * JUDGE_LINE_Y;
+            const farY = h * 0.2;
             
-            const p = z; // 0 to 1 progress
-            const currentY = playerY - (playerY - vanishingY) * p;
-            
-            // Width scaling
-            const perspectiveFactor = (1 - 0.7 * p); // Top is 30% width of bottom
+            const currentY = nearY - (nearY - farY) * z;
+            const scale = 1 - 0.7 * z; // Taper to 30% width
             const centerX = w / 2;
-            const currentX = centerX + (x - centerX) * perspectiveFactor;
+            const currentX = centerX + (x - centerX) * scale;
             
-            return { x: currentX, y: currentY, scale: perspectiveFactor };
+            return { x: currentX, y: currentY, scale: scale };
         };
 
-        // Draw Lanes
+        // Draw Track
         this.ctx.save();
-        this.ctx.globalCompositeOperation = 'screen';
-        
-        // Draw Track Background
         const btmL = project(trackX, 0);
         const btmR = project(trackX + laneWidth, 0);
         const topL = project(trackX, 1);
         const topR = project(trackX + laneWidth, 1);
         
-        this.ctx.fillStyle = 'rgba(0, 10, 20, 0.7)';
+        // Track BG
+        const grad = this.ctx.createLinearGradient(0, topL.y, 0, btmL.y);
+        grad.addColorStop(0, 'rgba(0,0,0,0)');
+        grad.addColorStop(1, 'rgba(0, 20, 30, 0.8)');
+        this.ctx.fillStyle = grad;
+        
         this.ctx.beginPath();
         this.ctx.moveTo(btmL.x, btmL.y);
         this.ctx.lineTo(btmR.x, btmR.y);
@@ -827,11 +813,9 @@ class RhythmGame {
         this.ctx.lineTo(topL.x, topL.y);
         this.ctx.fill();
 
-        // Draw Lane Dividers & Hit Line
-        this.ctx.strokeStyle = 'rgba(57, 197, 187, 0.5)';
-        this.ctx.lineWidth = 2;
-        
         // Dividers
+        this.ctx.strokeStyle = 'rgba(57, 197, 187, 0.3)';
+        this.ctx.lineWidth = 2;
         for(let i=0; i<=4; i++) {
             const p1 = project(trackX + i*lw, 0);
             const p2 = project(trackX + i*lw, 1);
@@ -849,78 +833,61 @@ class RhythmGame {
         this.ctx.lineTo(btmR.x, btmR.y);
         this.ctx.stroke();
 
-        // Input Feedback (Key Press visual)
+        // Key Press Feedback
         for(let i=0; i<4; i++) {
             if(this.laneState[i]) {
                 const p1 = project(trackX + i*lw, 0);
                 const p2 = project(trackX + (i+1)*lw, 0);
-                const p3 = project(trackX + i*lw, 0.2); // short ray up
+                const p3 = project(trackX + i*lw, 0.2);
                 
-                const grad = this.ctx.createLinearGradient(0, p1.y, 0, p3.y);
-                grad.addColorStop(0, 'rgba(255, 0, 85, 0.6)');
-                grad.addColorStop(1, 'transparent');
+                const fGrad = this.ctx.createLinearGradient(0, p1.y, 0, p3.y);
+                fGrad.addColorStop(0, 'rgba(255, 0, 85, 0.5)');
+                fGrad.addColorStop(1, 'transparent');
                 
-                this.ctx.fillStyle = grad;
+                this.ctx.fillStyle = fGrad;
                 this.ctx.fillRect(p1.x, p3.y, p2.x - p1.x, p1.y - p3.y);
             }
         }
 
         // Draw Notes
-        const speedMultiplier = this.noteSpeed * 0.5; // Tuning
+        const speedMultiplier = this.noteSpeed * 0.5;
 
         this.notes.forEach(note => {
             if (note.hit && note.type !== 'long') return;
             if (note.hit && note.type === 'long' && !note.holding && this.getCurrentTime() > note.time + note.length) return;
 
-            // Calculate Z position (0 = hit line, 1 = top)
-            // Time difference
             const dt = note.time - now;
-            
-            // Don't draw if too far or behind
-            if (dt > LOOKAHEAD / speedMultiplier) return;
-            
-            // Map dt to Z (1 -> 0)
-            // dt=0 => z=0
-            // dt=LOOKAHEAD => z=1
+            // z = 0 means NOW. z = 1 means LOOKAHEAD sec away.
             let z = dt / (LOOKAHEAD / speedMultiplier);
             
-            // Handle Long Note Tail
             let zTail = z;
             if (note.type === 'long') {
                 const dtTail = (note.time + note.length) - now;
                 zTail = dtTail / (LOOKAHEAD / speedMultiplier);
             }
 
-            // Cull
-            if (z > 1 && zTail > 1) return;
+            if (z > 1 && zTail > 1) return; // Too far
             if (z < -0.2 && zTail < -0.2) {
-                // Missed without processing (should be caught by logic but safe guard)
-                if (!note.hit) {
-                     note.hit = true;
-                     this.breakCombo();
-                }
+                if(!note.hit) { note.hit = true; this.breakCombo(); }
                 return;
-            } else if (note.type === 'end' && z < 0) {
-                this.endGame();
             }
-            
+            if (note.type === 'end' && z < 0) this.endGame();
             if (note.type === 'end') return;
 
-            // Clamp for drawing
+            // Clamp
             const drawZHead = Math.max(-0.1, Math.min(1, z));
             const drawZTail = Math.max(-0.1, Math.min(1, zTail));
 
-            // Coordinates
             const laneX = trackX + note.lane * lw;
             
-            // Draw Long Note Body
+            // Draw Long Body
             if (note.type === 'long') {
                 const headP = project(laneX, drawZHead);
                 const headPR = project(laneX + lw, drawZHead);
                 const tailP = project(laneX, drawZTail);
                 const tailPR = project(laneX + lw, drawZTail);
 
-                this.ctx.fillStyle = 'rgba(57, 197, 187, 0.6)'; // Cyan translucent
+                this.ctx.fillStyle = 'rgba(57, 197, 187, 0.6)';
                 this.ctx.beginPath();
                 this.ctx.moveTo(headP.x, headP.y);
                 this.ctx.lineTo(headPR.x, headPR.y);
@@ -929,27 +896,22 @@ class RhythmGame {
                 this.ctx.fill();
             }
 
-            // Draw Note Head
+            // Draw Head
             if (!note.hit || (note.type === 'long' && note.holding)) {
-                // If holding, keep head at judge line (z=0)
                 const currentZ = (note.holding) ? 0 : drawZHead;
                 const p = project(laneX, currentZ);
                 const pR = project(laneX + lw, currentZ);
                 
                 const width = pR.x - p.x;
-                const height = 15 * p.scale; // Scale height by perspective
+                const height = 15 * p.scale;
 
                 this.ctx.fillStyle = note.type === 'flick' ? '#ff0055' : '#39c5bb';
-                if(note.type === 'long') this.ctx.fillStyle = '#ffeb3b'; // Yellow for hold head
+                if(note.type === 'long') this.ctx.fillStyle = '#ffeb3b';
                 
-                // Note shape
                 this.ctx.fillRect(p.x + 2, p.y - height/2, width - 4, height);
-                
-                // Decor: Inner white
                 this.ctx.fillStyle = '#fff';
                 this.ctx.fillRect(p.x + 4, p.y - height/4, width - 8, height/2);
 
-                // Flick Arrow
                 if (note.type === 'flick') {
                     this.ctx.fillStyle = '#ff0055';
                     this.ctx.beginPath();
@@ -959,10 +921,14 @@ class RhythmGame {
                     this.ctx.fill();
                 }
             }
-
         });
 
         this.ctx.restore();
+    }
+
+    drawLaneFeedback(lane, active) {
+        // Optional: Instant feedback for touch could be added here
+        // Currently handled in main loop by this.laneState
     }
 
     drawVisualizer() {
@@ -973,44 +939,40 @@ class RhythmGame {
 
         const WIDTH = this.visCanvas.width;
         const HEIGHT = this.visCanvas.height;
-
         this.visCtx.clearRect(0, 0, WIDTH, HEIGHT);
         
-        // If video is playing, minimal visualizer or none
-        if (this.videoEl.style.display !== 'none' && !this.videoEl.paused) {
-            // Optional: Draw overlay or nothing. 
-            // Let's draw nothing to keep video clear, or subtle tint
-            return; 
-        }
+        if (this.videoEl.style.display !== 'none' && !this.videoEl.paused) return;
 
-        // Draw Waveform if no video
         this.visCtx.fillStyle = 'rgba(0, 0, 0, 0.2)';
         this.visCtx.fillRect(0, 0, WIDTH, HEIGHT);
 
         const barWidth = (WIDTH / bufferLength) * 2.5;
-        let barHeight;
         let x = 0;
-
         for(let i = 0; i < bufferLength; i++) {
-            barHeight = dataArray[i] * 1.5;
-
-            // Mirror effect
+            let barHeight = dataArray[i] * 1.5;
             this.visCtx.fillStyle = 'rgba(57, 197, 187, ' + (barHeight/400) + ')';
             this.visCtx.fillRect(x, HEIGHT/2 - barHeight/2, barWidth, barHeight);
-
             x += barWidth + 1;
         }
     }
 }
 
-// --- Initialization ---
+// --- Init & UI Bindings ---
 const game = new RhythmGame();
 
-// UI Event Listeners
-document.getElementById('file-input').addEventListener('change', function(e) {
+const fileInput = document.getElementById('file-input');
+const fileBtn = document.getElementById('file-select-btn');
+
+// Button triggers hidden input
+fileBtn.addEventListener('click', () => {
+    fileInput.click();
+});
+
+fileInput.addEventListener('change', function(e) {
     if(e.target.files.length > 0) {
         document.getElementById('file-name').innerText = e.target.files[0].name;
         document.getElementById('start-btn').disabled = false;
+        fileBtn.innerText = "CHANGE FILE";
         
         // Settings update
         game.difficulty = parseInt(document.getElementById('diff-select').value);
@@ -1028,11 +990,11 @@ document.getElementById('diff-select').addEventListener('change', function(e) {
 });
 
 document.getElementById('start-btn').addEventListener('click', function() {
-    const file = document.getElementById('file-input').files[0];
+    const file = fileInput.files[0];
     if(file) game.loadFile(file);
 });
 
-// Animations CSS inject
+// CSS Animations
 const styleSheet = document.createElement("style");
 styleSheet.innerText = `
 @keyframes pop {
@@ -1047,7 +1009,6 @@ styleSheet.innerText = `
 }
 `;
 document.head.appendChild(styleSheet);
-
 </script>
 </body>
 </html>
