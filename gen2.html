@@ -1,0 +1,439 @@
+<!DOCTYPE html>
+<html lang="ja">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Chart Generator (JSON Export)</title>
+    <style>
+        @import url('https://fonts.googleapis.com/css2?family=Exo+2:wght@400;700&display=swap');
+
+        :root {
+            --primary: #39c5bb;
+            --bg: #121212;
+            --card: #1e1e1e;
+            --text: #ffffff;
+            --border: #333;
+        }
+
+        body {
+            font-family: 'Exo 2', sans-serif;
+            background-color: var(--bg);
+            color: var(--text);
+            margin: 0;
+            display: flex;
+            justify-content: center;
+            align-items: center;
+            min-height: 100vh;
+        }
+
+        .container {
+            background: var(--card);
+            width: 90%;
+            max-width: 600px;
+            padding: 2rem;
+            border-radius: 12px;
+            box-shadow: 0 10px 25px rgba(0,0,0,0.5);
+            border: 1px solid var(--border);
+            text-align: center;
+        }
+
+        h1 {
+            color: var(--primary);
+            text-transform: uppercase;
+            letter-spacing: 2px;
+            margin-top: 0;
+        }
+
+        .description {
+            color: #aaa;
+            font-size: 0.9rem;
+            margin-bottom: 2rem;
+            line-height: 1.5;
+        }
+
+        .input-group {
+            margin-bottom: 20px;
+            padding: 20px;
+            border: 2px dashed #444;
+            border-radius: 8px;
+            transition: border-color 0.3s, background-color 0.3s;
+        }
+
+        .input-group:hover {
+            border-color: var(--primary);
+        }
+
+        /* ドラッグ中のスタイル */
+        .input-group.drag-over {
+            border-color: var(--primary);
+            background-color: rgba(57, 197, 187, 0.1);
+        }
+
+        input[type="file"] {
+            display: none;
+        }
+
+        .file-label {
+            display: inline-block;
+            padding: 10px 20px;
+            background: #333;
+            color: #fff;
+            border-radius: 4px;
+            cursor: pointer;
+            transition: background 0.2s;
+        }
+
+        .file-label:hover {
+            background: #444;
+        }
+
+        #file-name-display {
+            margin-top: 10px;
+            font-weight: bold;
+            color: var(--primary);
+            min-height: 1.2em;
+        }
+
+        button#generate-btn {
+            background: linear-gradient(45deg, var(--primary), #2a9d8f);
+            border: none;
+            color: white;
+            padding: 15px 40px;
+            font-size: 1.1rem;
+            font-weight: bold;
+            border-radius: 30px;
+            cursor: pointer;
+            text-transform: uppercase;
+            box-shadow: 0 4px 15px rgba(57, 197, 187, 0.4);
+            transition: transform 0.1s, opacity 0.2s;
+            width: 100%;
+        }
+
+        button#generate-btn:disabled {
+            background: #444;
+            box-shadow: none;
+            cursor: not-allowed;
+            opacity: 0.5;
+        }
+
+        button#generate-btn:active {
+            transform: scale(0.98);
+        }
+
+        #log-area {
+            margin-top: 20px;
+            background: #000;
+            padding: 10px;
+            border-radius: 5px;
+            font-family: monospace;
+            text-align: left;
+            height: 150px;
+            overflow-y: auto;
+            font-size: 0.85rem;
+            color: #ccc;
+            border: 1px solid #333;
+        }
+
+        .log-line { margin: 2px 0; }
+        .log-success { color: #4caf50; }
+        .log-info { color: #2196f3; }
+        .log-warn { color: #ff9800; }
+
+        /* Progress Bar */
+        .progress-container {
+            width: 100%;
+            height: 4px;
+            background: #333;
+            margin-top: 15px;
+            border-radius: 2px;
+            overflow: hidden;
+        }
+        .progress-bar {
+            height: 100%;
+            width: 0%;
+            background: var(--primary);
+            transition: width 0.3s;
+        }
+    </style>
+</head>
+<body>
+
+<div class="container">
+    <h1>Chart Generator</h1>
+    <p class="description">
+        音声ファイルをアップロードして、EasyからMasterまでの全難易度を含む譜面データ(JSON)を一括生成します。
+    </p>
+
+    <div class="input-group" id="drop-zone">
+        <label for="audio-input" class="file-label">SELECT AUDIO FILE</label>
+        <input type="file" id="audio-input" accept="audio/*, video/*">
+        <div id="file-name-display">No file selected</div>
+    </div>
+
+    <button id="generate-btn" disabled>GENERATE JSON</button>
+    
+    <div class="progress-container">
+        <div class="progress-bar" id="progress-bar"></div>
+    </div>
+
+    <div id="log-area">
+        <div class="log-line">Ready to generate.</div>
+    </div>
+</div>
+
+<script>
+/**
+ * Logic ported from AI Rhythm Game 3D
+ */
+
+const LANES = 4;
+
+// --- Pseudo Random Class ---
+class PseudoRandom {
+    constructor(seed) {
+        this.seed = seed % 2147483647;
+        if (this.seed <= 0) this.seed += 2147483646;
+    }
+    next() { return this.seed = this.seed * 16807 % 2147483647; }
+    nextFloat() { return (this.next() - 1) / 2147483646; }
+}
+
+// --- UI Elements ---
+const fileInput = document.getElementById('audio-input');
+const dropZone = document.getElementById('drop-zone');
+const fileNameDisplay = document.getElementById('file-name-display');
+const generateBtn = document.getElementById('generate-btn');
+const logArea = document.getElementById('log-area');
+const progressBar = document.getElementById('progress-bar');
+
+let selectedFile = null;
+let audioCtx = null;
+
+// --- Logger ---
+function log(msg, type = 'normal') {
+    const div = document.createElement('div');
+    div.innerText = `> ${msg}`;
+    div.className = 'log-line';
+    if(type === 'success') div.classList.add('log-success');
+    if(type === 'info') div.classList.add('log-info');
+    if(type === 'warn') div.classList.add('log-warn');
+    logArea.appendChild(div);
+    logArea.scrollTop = logArea.scrollHeight;
+}
+
+function setProgress(percent) {
+    progressBar.style.width = `${percent}%`;
+}
+
+// --- File Handling Logic ---
+function handleFileSelection(file) {
+    if (file && (file.type.startsWith('audio/') || file.type.startsWith('video/'))) {
+        selectedFile = file;
+        fileNameDisplay.innerText = selectedFile.name;
+        generateBtn.disabled = false;
+        log(`Selected: ${selectedFile.name}`);
+        setProgress(0);
+    } else if (file) {
+        log("Invalid file type. Please select an audio or video file.", "warn");
+    }
+}
+
+// --- Event Listeners ---
+
+// Click upload
+fileInput.addEventListener('change', (e) => {
+    if (e.target.files.length > 0) {
+        handleFileSelection(e.target.files[0]);
+    }
+});
+
+// Drag & Drop
+['dragenter', 'dragover', 'dragleave', 'drop'].forEach(eventName => {
+    dropZone.addEventListener(eventName, (e) => {
+        e.preventDefault();
+        e.stopPropagation();
+    }, false);
+});
+
+['dragenter', 'dragover'].forEach(eventName => {
+    dropZone.addEventListener(eventName, () => {
+        dropZone.classList.add('drag-over');
+    }, false);
+});
+
+['dragleave', 'drop'].forEach(eventName => {
+    dropZone.addEventListener(eventName, () => {
+        dropZone.classList.remove('drag-over');
+    }, false);
+});
+
+dropZone.addEventListener('drop', (e) => {
+    const dt = e.dataTransfer;
+    const files = dt.files;
+    if (files.length > 0) {
+        handleFileSelection(files[0]);
+    }
+});
+
+generateBtn.addEventListener('click', async () => {
+    if (!selectedFile) return;
+    
+    generateBtn.disabled = true;
+    setProgress(10);
+    log("Starting process...", "info");
+
+    try {
+        if (!audioCtx) audioCtx = new (window.AudioContext || window.webkitAudioContext)();
+        
+        log("Reading file...");
+        const arrayBuffer = await selectedFile.arrayBuffer();
+        
+        log("Decoding audio data (this may take a moment)...", "info");
+        setProgress(30);
+        
+        // Decoding
+        const audioBuffer = await audioCtx.decodeAudioData(arrayBuffer);
+        log(`Decoded successfully. Duration: ${audioBuffer.duration.toFixed(2)}s`, "success");
+        setProgress(50);
+
+        // Generate Seed
+        const seedStr = selectedFile.name + selectedFile.size;
+        let seedVal = 0;
+        for (let i=0; i<seedStr.length; i++) seedVal += seedStr.charCodeAt(i);
+        log(`Generated Seed: ${seedVal}`);
+
+        // Prepare Output Object
+        const outputJson = {
+            meta: {
+                title: selectedFile.name,
+                duration: audioBuffer.duration,
+                generatedAt: new Date().toISOString(),
+                seed: seedVal
+            },
+            charts: {}
+        };
+
+        const difficulties = [
+            { id: 0, name: "Easy" },
+            { id: 1, name: "Normal" },
+            { id: 2, name: "Hard" },
+            { id: 3, name: "Expert" },
+            { id: 4, name: "Master" }
+        ];
+
+        // Generation Loop
+        for (let i = 0; i < difficulties.length; i++) {
+            const diff = difficulties[i];
+            log(`Generating chart: ${diff.name}...`);
+            
+            // Generate notes for this difficulty
+            const notes = generatePattern(audioBuffer, seedVal, diff.id);
+            
+            // Add to JSON object
+            outputJson.charts[diff.id] = notes;
+            
+            setProgress(50 + ((i + 1) / difficulties.length) * 40);
+        }
+
+        log("All charts generated!", "success");
+        
+        // Export
+        downloadJSON(outputJson, selectedFile.name + ".json");
+        
+        setProgress(100);
+        generateBtn.disabled = false;
+        
+    } catch (err) {
+        console.error(err);
+        log(`Error: ${err.message}`, "warn");
+        generateBtn.disabled = false;
+        setProgress(0);
+    }
+});
+
+/**
+ * Core Algorithm (Extracted from Game)
+ */
+function generatePattern(buffer, seed, difficulty) {
+    const rawData = buffer.getChannelData(0);
+    const sampleRate = buffer.sampleRate;
+    const rng = new PseudoRandom(seed);
+    const notes = [];
+
+    const d = difficulty;
+    
+    // Parameters per difficulty
+    const threshold = [0.15, 0.12, 0.09, 0.06, 0.04][d]; 
+    const minStep = [0.5, 0.4, 0.25, 0.15, 0.1][d]; 
+
+    const stepSize = Math.floor(sampleRate * 0.05); // 50ms chunks
+    let lastTime = -10;
+
+    for (let i = 0; i < rawData.length; i += stepSize) {
+        let sum = 0;
+        let count = 0;
+        // Sampling
+        for (let j = 0; j < stepSize; j += 8) { 
+            if (i + j < rawData.length) {
+                sum += Math.abs(rawData[i + j]);
+                count++;
+            }
+        }
+        const vol = sum / count;
+        const time = i / sampleRate;
+
+        // Note placement logic
+        if (vol > threshold && (time - lastTime) >= minStep) {
+            const lane = Math.floor(rng.nextFloat() * LANES);
+            let type = 'tap';
+            let len = 0;
+            
+            const r = rng.nextFloat();
+            // Long note chance
+            if (r > 0.90 - (d * 0.02)) { 
+                type = 'long';
+                len = 0.2 + rng.nextFloat() * 2.0;
+            } 
+            // Flick note chance
+            else if (r < 0.1 + (d * 0.05)) { 
+                type = 'flick';
+            }
+
+            notes.push({
+                time: parseFloat(time.toFixed(3)),
+                lane: lane,
+                type: type,
+                length: parseFloat(len.toFixed(3))
+            });
+            lastTime = time;
+        }
+    }
+
+    // Add End Marker
+    notes.push({ time: parseFloat((buffer.duration + 0.5).toFixed(3)), lane: 0, type: 'end', length: 0 });
+    
+    return notes;
+}
+
+/**
+ * Download Helper
+ */
+function downloadJSON(data, filename) {
+    const jsonStr = JSON.stringify(data, null, 2);
+    const blob = new Blob([jsonStr], { type: "application/json" });
+    const url = URL.createObjectURL(blob);
+    
+    const a = document.createElement('a');
+    a.href = url;
+    a.download = filename;
+    document.body.appendChild(a);
+    a.click();
+    document.body.removeChild(a);
+    URL.revokeObjectURL(url);
+    
+    log(`Downloaded: ${filename}`, "success");
+}
+
+</script>
+</body>
+</html>
