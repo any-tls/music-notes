@@ -1,0 +1,798 @@
+<!DOCTYPE html>
+<html lang="ja">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
+    <title>SEKAI GEN - ULTIMATE</title>
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/jsmediatags/3.9.5/jsmediatags.min.js"></script>
+    <style>
+        :root {
+            --primary: #33d5ac; /* Miku Green */
+            --accent: #ff007c; /* Pink */
+            --bg-color: #050510;
+        }
+        * { box-sizing: border-box; user-select: none; -webkit-user-select: none; touch-action: none; }
+        body { margin: 0; overflow: hidden; background: var(--bg-color); font-family: 'Segoe UI', sans-serif; color: white; }
+
+        /* --- Layers --- */
+        #bg-layer { position: absolute; top:0; left:0; width:100%; height:100%; z-index:0; overflow:hidden; }
+        #bg-media { width: 100%; height: 100%; object-fit: cover; opacity: 0.4; filter: blur(3px) brightness(0.6); transition: opacity 0.5s; }
+        #visualizer-canvas { position: absolute; top:0; left:0; width:100%; height:100%; opacity: 0.6; mix-blend-mode: screen; }
+        
+        #game-layer { position: absolute; top:0; left:0; width:100%; height:100%; z-index:1; }
+
+        .screen {
+            position: absolute; top:0; left:0; width:100%; height:100%; z-index:10;
+            display: flex; flex-direction: column; align-items: center; justify-content: center;
+            background: rgba(0,0,0,0.8); backdrop-filter: blur(10px);
+            transition: opacity 0.4s; opacity: 0; pointer-events: none;
+        }
+        .screen.active { opacity: 1; pointer-events: auto; }
+
+        /* --- UI Elements --- */
+        .logo-img { width: 320px; max-width:80%; margin-bottom: 20px; filter: drop-shadow(0 0 15px var(--primary)); animation: float 3s ease-in-out infinite; }
+        @keyframes float { 0%,100%{transform:translateY(0)} 50%{transform:translateY(-10px)} }
+
+        .btn {
+            background: linear-gradient(135deg, var(--primary), #00b894);
+            border: none; padding: 15px 50px; border-radius: 40px;
+            color: #fff; font-size: 1.2rem; font-weight: bold; letter-spacing: 2px;
+            cursor: pointer; box-shadow: 0 5px 20px rgba(51, 213, 172, 0.5);
+            transition: transform 0.1s; margin-top: 10px;
+        }
+        .btn:active { transform: scale(0.95); }
+        .btn:disabled { background: #555; box-shadow: none; cursor: not-allowed; }
+
+        /* Select Screen */
+        .panel { background: rgba(255,255,255,0.9); width:90%; max-width:600px; border-radius:20px; padding:30px; color:#333; box-shadow:0 0 30px rgba(0,0,0,0.5); }
+        .file-box { border: 3px dashed #aaa; padding: 30px; text-align: center; border-radius: 10px; cursor: pointer; background: #f0f0f0; margin-bottom: 20px; transition: 0.3s; }
+        .file-box:hover { border-color: var(--primary); background: #e0fbf4; }
+        
+        .diff-row { display: flex; gap: 5px; margin-bottom: 20px; }
+        .diff-btn { flex: 1; padding: 12px 0; border: none; color: white; font-weight: 900; font-size: 0.9rem; cursor: pointer; opacity: 0.4; transform: skewX(-10deg); border-radius: 4px; transition: 0.2s; }
+        .diff-btn span { display: block; transform: skewX(10deg); }
+        .diff-btn.active { opacity: 1; transform: scale(1.1) skewX(-10deg); z-index:2; box-shadow: 0 5px 15px rgba(0,0,0,0.3); }
+        
+        .c-easy { background: #00b894; } .c-norm { background: #0984e3; } .c-hard { background: #fdcb6e; } .c-exp { background: #d63031; } .c-mas { background: #6c5ce7; }
+
+        /* Game UI */
+        .game-ui { position: absolute; width:100%; height:100%; pointer-events: none; padding: 20px; z-index: 5; display: flex; flex-direction: column; justify-content: space-between; }
+        .hud-top { display: flex; justify-content: space-between; width: 100%; }
+        .score-box { text-align: left; }
+        .score-num { font-family: 'Courier New', monospace; font-size: 2.5rem; font-weight: 900; color: white; text-shadow: 0 0 10px var(--primary); }
+        .life-gauge { width: 250px; height: 10px; background: rgba(255,255,255,0.2); border-radius: 5px; overflow: hidden; margin-top: 5px; }
+        .life-fill { height: 100%; width: 100%; background: #00b894; transition: width 0.1s; box-shadow: 0 0 10px #00b894; }
+        
+        .combo-box { position: absolute; top: 40%; left: 50%; transform: translate(-50%, -50%); text-align: center; opacity: 0; transition: opacity 0.1s; }
+        .combo-box.show { opacity: 1; }
+        .combo-val { font-size: 5rem; font-weight: 900; font-style: italic; background: linear-gradient(to bottom, #fff, var(--primary)); -webkit-background-clip: text; -webkit-text-fill-color: transparent; line-height: 1; }
+        
+        .judge-text { position: absolute; top: 60%; left: 50%; transform: translate(-50%, -50%); font-size: 2.5rem; font-weight: 900; font-style: italic; opacity: 0; text-shadow: 0 0 20px white; }
+
+        #loading { display: none; position: fixed; top:0; left:0; width:100%; height:100%; background:rgba(0,0,0,0.9); z-index:99; flex-direction:column; align-items:center; justify-content:center; color:white; }
+        .spinner { width: 50px; height: 50px; border: 5px solid rgba(255,255,255,0.2); border-top-color: var(--primary); border-radius: 50%; animation: spin 1s infinite linear; margin-bottom: 20px; }
+        @keyframes spin{to{transform:rotate(360deg)}}
+
+        @media(max-width:600px){ .score-num{font-size:1.8rem;} .life-gauge{width:150px;} }
+    </style>
+</head>
+<body>
+
+    <div id="bg-layer">
+        <div id="bg-media-container" style="width:100%; height:100%;">
+            </div>
+        <canvas id="visualizer-canvas"></canvas>
+    </div>
+
+    <div id="loading">
+        <div class="spinner"></div>
+        <div id="loading-txt">Generating Chart...</div>
+    </div>
+
+    <div id="title-screen" class="screen active">
+        <img src="https://regeld.com/desi/wp-content/uploads/2021/02/210207_music11.png" alt="Logo" class="logo-img">
+        <p style="letter-spacing:4px; opacity:0.8;">AI RHYTHM SYSTEM</p>
+        <button class="btn" onclick="navTo('select-screen')">START</button>
+    </div>
+
+    <div id="select-screen" class="screen">
+        <div class="panel">
+            <h2 style="color:var(--primary); text-align:center;">SELECT MUSIC</h2>
+            
+            <div class="file-box" onclick="document.getElementById('file-in').click()">
+                <div style="font-size:2rem;">📂</div>
+                <div style="font-weight:bold; margin-top:10px;">ファイルを選択</div>
+                <div style="font-size:0.8rem; color:#666;">MP3, WAV, MP4 (Video/Audio)</div>
+            </div>
+            <input type="file" id="file-in" accept="audio/*,video/*" style="display:none" onchange="loadFile(this)">
+
+            <label style="font-weight:bold; color:#555;">DIFFICULTY</label>
+            <div class="diff-row">
+                <button class="diff-btn c-easy" onclick="setDiff(0)"><span>EASY</span></button>
+                <button class="diff-btn c-norm" onclick="setDiff(1)"><span>NORMAL</span></button>
+                <button class="diff-btn c-hard active" onclick="setDiff(2)"><span>HARD</span></button>
+                <button class="diff-btn c-exp" onclick="setDiff(3)"><span>EXPERT</span></button>
+                <button class="diff-btn c-mas" onclick="setDiff(4)"><span>MASTER</span></button>
+            </div>
+
+            <label style="font-weight:bold; color:#555;">SPEED: <span id="spd-val">9.0</span></label>
+            <input type="range" min="1" max="15" step="0.5" value="9" style="width:100%; accent-color:var(--primary);" oninput="setSpeed(this.value)">
+
+            <button id="btn-play" class="btn" style="width:100%;" disabled onclick="startGame()">FILE REQUIRED</button>
+        </div>
+    </div>
+
+    <div id="game-layer">
+        <canvas id="game-canvas"></canvas>
+        <div class="game-ui" id="game-ui" style="display:none;">
+            <div class="hud-top">
+                <div class="score-box">
+                    <div class="score-num" id="score-disp">0000000</div>
+                    <div class="life-gauge"><div class="life-fill" id="life-bar"></div></div>
+                </div>
+                <button class="btn" style="padding:5px 20px; font-size:0.8rem;" onclick="endGame()">EXIT</button>
+            </div>
+            
+            <div class="combo-box" id="combo-box">
+                <div class="combo-val" id="combo-num">0</div>
+                <div style="font-weight:bold; letter-spacing:2px;">COMBO</div>
+            </div>
+            
+            <div class="judge-text" id="judge-disp">PERFECT</div>
+        </div>
+    </div>
+
+    <div id="result-screen" class="screen">
+        <div class="panel" style="text-align:center;">
+            <h2 style="font-style:italic; margin:0; color:var(--primary)">FULL COMBO?</h2>
+            <div style="font-size:6rem; font-weight:900; background:linear-gradient(45deg,#fdcb6e,#d63031); -webkit-background-clip:text; -webkit-text-fill-color:transparent;" id="res-rank">S</div>
+            <div style="font-size:1.5rem;">Score: <span id="res-score">0</span></div>
+            <div style="color:#666;">Max Combo: <span id="res-combo">0</span></div>
+            <button class="btn" onclick="navTo('select-screen')">BACK</button>
+        </div>
+    </div>
+
+<script>
+/**
+ * SEKAI GEN - Ultimate Edition
+ * Features: High Density Charting, ID3 Art Reader, Fixed Input Logic, High-Perf 3D
+ */
+
+const CONFIG = {
+    laneCount: 4,
+    speed: 9.0,
+    difficulty: 2, // 0-4
+    inputKeys: ['d', 'f', 'j', 'k'],
+    hitWindow: { perf: 0.05, great: 0.1, good: 0.15, bad: 0.25 }
+};
+
+const DIFF_SETTINGS = [
+    { name: 'EASY',   fluxThr: 1.5, minGap: 0.40, slide: false },
+    { name: 'NORMAL', fluxThr: 1.3, minGap: 0.25, slide: false },
+    { name: 'HARD',   fluxThr: 1.1, minGap: 0.18, slide: true },
+    { name: 'EXPERT', fluxThr: 0.95, minGap: 0.10, slide: true }, // High density
+    { name: 'MASTER', fluxThr: 0.85, minGap: 0.06, slide: true }  // Extreme density
+];
+
+// State
+let audioCtx, analyzer, sourceNode;
+let audioBuffer = null;
+let chart = [];
+let activeNotes = [];
+let isPlaying = false;
+let startTime = 0;
+let score = 0, combo = 0, maxCombo = 0, life = 1000;
+let bgType = 'none'; // 'video', 'image', 'none'
+let touchLanes = [false, false, false, false];
+
+// Canvas
+const cvs = document.getElementById('game-canvas');
+const ctx = cvs.getContext('2d', { alpha: true, desynchronized: true });
+const vCvs = document.getElementById('visualizer-canvas');
+const vCtx = vCvs.getContext('2d');
+
+// --- Initialization & UI ---
+function navTo(id) {
+    document.querySelectorAll('.screen').forEach(s => s.classList.remove('active'));
+    document.getElementById(id).classList.add('active');
+    
+    if(id === 'title') {
+        stopAudio();
+    }
+}
+
+function setDiff(idx) {
+    CONFIG.difficulty = idx;
+    document.querySelectorAll('.diff-btn').forEach((b,i) => b.classList.toggle('active', i===idx));
+}
+function setSpeed(val) {
+    CONFIG.speed = parseFloat(val);
+    document.getElementById('spd-val').innerText = CONFIG.speed.toFixed(1);
+}
+
+// --- File Loading & Analysis ---
+async function loadFile(input) {
+    const file = input.files[0];
+    if(!file) return;
+    
+    const loading = document.getElementById('loading');
+    loading.style.display = 'flex';
+    document.getElementById('loading-txt').innerText = "Reading Media...";
+
+    // 1. Check for Album Art (ID3)
+    const bgContainer = document.getElementById('bg-media-container');
+    bgContainer.innerHTML = ''; // Clear old
+    bgType = 'none';
+
+    if (file.type.startsWith('audio/')) {
+        // Try to read tag
+        new jsmediatags.Reader(file).setTagsToRead(["picture"]).read({
+            onSuccess: (tag) => {
+                const tags = tag.tags;
+                if (tags.picture) {
+                    const { data, format } = tags.picture;
+                    let base64String = "";
+                    for (let i = 0; i < data.length; i++) base64String += String.fromCharCode(data[i]);
+                    const img = document.createElement('img');
+                    img.src = `data:${format};base64,${window.btoa(base64String)}`;
+                    img.id = 'bg-media';
+                    bgContainer.appendChild(img);
+                    bgType = 'image';
+                }
+            },
+            onError: (error) => { console.log("No tags found or error", error); }
+        });
+    } else if (file.type.startsWith('video/')) {
+        const vid = document.createElement('video');
+        vid.src = URL.createObjectURL(file);
+        vid.id = 'bg-media';
+        vid.muted = true; // Audio handled by AudioContext
+        vid.playsInline = true;
+        vid.loop = false;
+        bgContainer.appendChild(vid);
+        bgType = 'video';
+    }
+
+    // 2. Decode Audio
+    if(!audioCtx) audioCtx = new (window.AudioContext || window.webkitAudioContext)();
+    
+    const arrayBuffer = await file.arrayBuffer();
+    try {
+        audioBuffer = await audioCtx.decodeAudioData(arrayBuffer);
+        
+        // 3. Generate Chart
+        document.getElementById('loading-txt').innerText = "AI Generating Chart...";
+        // Give UI a moment to update
+        setTimeout(() => {
+            generateChart(audioBuffer);
+            loading.style.display = 'none';
+            document.getElementById('btn-play').innerText = "START GAME";
+            document.getElementById('btn-play').disabled = false;
+        }, 100);
+    } catch(e) {
+        alert("Audio Decode Error");
+        loading.style.display = 'none';
+    }
+}
+
+// --- Enhanced Chart Generation (Spectral Flux) ---
+function generateChart(buffer) {
+    const data = buffer.getChannelData(0);
+    const sr = buffer.sampleRate;
+    const notes = [];
+    const diff = DIFF_SETTINGS[CONFIG.difficulty];
+    
+    // Config
+    const fftSize = 1024;
+    const hopSize = Math.floor(sr / 60); // 60fps analysis
+    
+    // Calculate Spectral Flux (Change in energy per freq bin)
+    // Simplified: Just use raw signal derivative for performance in JS
+    // A full FFT in JS for a whole song takes too long without WebAssembly.
+    // We will use a high-pass filtered energy detector which is robust for drums.
+    
+    let localEnergy = [];
+    let k = 0;
+    while(k < data.length) {
+        let sum = 0;
+        for(let i=0; i<hopSize && k+i<data.length; i++) {
+            // Simple High pass (diff) to highlight transients
+            let val = Math.abs(data[k+i] - (data[k+i-1]||0)); 
+            sum += val * val;
+        }
+        localEnergy.push(Math.sqrt(sum/hopSize));
+        k += hopSize;
+    }
+
+    // Peak Picking
+    const lookback = 20;
+    let lastTime = -10;
+    
+    for(let i = lookback; i < localEnergy.length - 10; i++) {
+        // Calculate local average
+        let avg = 0; 
+        for(let j=1; j<=lookback; j++) avg += localEnergy[i-j];
+        avg /= lookback;
+        
+        let current = localEnergy[i];
+        
+        // Threshold check
+        if (current > avg * diff.fluxThr && current > 0.02) {
+            let t = (i * hopSize) / sr;
+            
+            if (t - lastTime >= diff.minGap) {
+                // ADD NOTE
+                let lane = Math.floor(Math.random() * 4);
+                
+                // Logic for "Flow"
+                if (notes.length > 0) {
+                    const prev = notes[notes.length-1];
+                    // Avoid same lane too often on easy
+                    if(CONFIG.difficulty < 2 && prev.lane === lane) lane = (lane+1)%4;
+                }
+
+                let type = 'tap';
+                let dur = 0;
+                let endLane = lane;
+
+                // Create Long Notes / Slides
+                if (diff.slide && Math.random() < 0.25) {
+                    type = 'long';
+                    dur = Math.random() * 0.5 + 0.2; // Short to medium holds
+                    
+                    // Slide?
+                    if (CONFIG.difficulty >= 2 && Math.random() > 0.5) {
+                        const shift = Math.random()>0.5 ? 1 : -1;
+                        endLane = Math.max(0, Math.min(3, lane + shift));
+                    }
+                    lastTime = t + dur * 0.8; // Overlap slightly permitted
+                } else {
+                    lastTime = t;
+                }
+                
+                // Add note
+                notes.push({ time: t, lane, endLane, type, dur, hit: false, processed: false, holding: false });
+
+                // **Double Note Generation (Expert/Master)**
+                if (CONFIG.difficulty >= 3 && Math.random() > 0.6) {
+                     // Add another note at same time in different lane
+                     let lane2 = (lane + 2) % 4;
+                     notes.push({ time: t, lane: lane2, endLane: lane2, type: 'tap', dur: 0, hit: false, processed: false });
+                }
+            }
+        }
+    }
+    
+    chart = notes.sort((a,b) => a.time - b.time);
+    console.log(`Generated ${chart.length} notes`);
+}
+
+// --- Game Engine ---
+function startGame() {
+    if(!audioBuffer) return;
+    navTo('game-layer'); // Show canvas, hide menus
+    document.getElementById('game-ui').style.display = 'flex';
+    
+    // Reset Stats
+    score = 0; combo = 0; maxCombo = 0; life = 1000;
+    updateHUD();
+    
+    // Prep Notes
+    activeNotes = JSON.parse(JSON.stringify(chart));
+    
+    // Audio Setup
+    sourceNode = audioCtx.createBufferSource();
+    sourceNode.buffer = audioBuffer;
+    
+    // Analyzer for Visualizer
+    analyzer = audioCtx.createAnalyser();
+    analyzer.fftSize = 256;
+    sourceNode.connect(analyzer);
+    analyzer.connect(audioCtx.destination);
+    
+    // Video Sync
+    const vid = document.getElementById('bg-media');
+    if(bgType === 'video' && vid) {
+        vid.currentTime = 0;
+        vid.play();
+    }
+
+    startTime = audioCtx.currentTime + 1.5; // 1.5s delay
+    sourceNode.start(startTime);
+    sourceNode.onended = () => setTimeout(endGame, 1000);
+    
+    isPlaying = true;
+    resize();
+    loop();
+}
+
+function endGame() {
+    isPlaying = false;
+    stopAudio();
+    navTo('result-screen');
+    
+    // Calc Rank
+    const maxScore = chart.length * 1000; // Approx
+    const pct = score / (maxScore || 1);
+    let r = 'C';
+    if(pct > 0.6) r = 'B';
+    if(pct > 0.8) r = 'A';
+    if(pct > 0.9) r = 'S';
+    if(pct > 0.95) r = 'SS';
+    if(pct > 0.98) r = 'MASTER';
+    
+    document.getElementById('res-rank').innerText = r;
+    document.getElementById('res-score').innerText = Math.floor(score);
+    document.getElementById('res-combo').innerText = maxCombo;
+}
+
+function stopAudio() {
+    if(sourceNode) { try{sourceNode.stop();}catch(e){} sourceNode = null; }
+    const vid = document.getElementById('bg-media');
+    if(vid && bgType==='video') vid.pause();
+}
+
+// --- Rendering & Logic Loop ---
+function loop() {
+    if(!isPlaying) return;
+    requestAnimationFrame(loop);
+    
+    const now = audioCtx.currentTime;
+    const time = now - startTime;
+    
+    // 1. Draw Background Visualizer
+    drawVisualizer();
+
+    // 2. Clear Game Canvas
+    ctx.clearRect(0,0,cvs.width,cvs.height);
+    
+    // 3. Draw 3D Track
+    drawTrack();
+    
+    // 4. Draw & Update Notes
+    // Render back to front
+    // Use "High Performance" rendering (limit heavy effects)
+    
+    // Note Logic
+    const speed = CONFIG.speed; // Z-units per second
+    
+    activeNotes.forEach(n => {
+        if(n.processed && n.type !== 'long') return;
+        
+        // Time diff
+        const dt = n.time - time;
+        const z = dt * speed;
+        
+        // Input Windows (Automatic Miss)
+        if (!n.hit && !n.processed && dt < -CONFIG.hitWindow.bad) {
+             // Miss head
+             if(n.type !== 'long' || (n.type==='long' && dt < -(n.dur+CONFIG.hitWindow.bad))) {
+                 triggerJudge('MISS');
+                 n.processed = true;
+                 breakCombo();
+                 return;
+             }
+        }
+        
+        // Visibility Check (Z: -2 to 20)
+        if (z > 20 || (z < -10 && n.type !== 'long')) return;
+        
+        // Draw Long Body
+        if (n.type === 'long') {
+            const endDt = (n.time + n.dur) - time;
+            const endZ = endDt * speed;
+            if (endZ > 0) {
+                // Determine head position
+                let headZ = Math.max(0, z); // Clamp to hitline
+                let curLane = n.lane;
+                
+                // Visual Slide Calculation
+                if (n.holding) {
+                    headZ = 0;
+                    // Interpolate lane
+                    const prog = (time - n.time) / n.dur;
+                    curLane = n.lane + (n.endLane - n.lane) * Math.min(1, Math.max(0, prog));
+                }
+                
+                drawLongNote(curLane, n.endLane, headZ, endZ);
+                
+                // Draw Holding Effect
+                if (n.holding) {
+                    const p = project(curLane, 0);
+                    ctx.globalCompositeOperation = 'lighter';
+                    ctx.fillStyle = '#fff';
+                    ctx.beginPath(); ctx.arc(p.x, p.y, 20, 0, 7); ctx.fill();
+                    ctx.globalCompositeOperation = 'source-over';
+                }
+            }
+        }
+        
+        // Draw Head
+        if (!n.holding && !n.processed && z > -1) {
+             drawNote(n.lane, z, n.type);
+        }
+    });
+    
+    // Auto-complete held long notes
+    activeNotes.forEach(n => {
+        if (n.holding && !n.processed) {
+            if (time > n.time + n.dur) {
+                n.processed = true;
+                n.holding = false;
+                addScore(500, true); // Finish bonus
+                triggerJudge('PERFECT');
+            }
+        }
+    });
+}
+
+// --- 3D Projection Helpers ---
+// Perspective: Y is Up/Down on screen. Z is depth.
+function project(lane, z) {
+    // Constants
+    const W = cvs.width;
+    const H = cvs.height;
+    const horizonY = H * 0.2;
+    const hitY = H * 0.85;
+    
+    // Perspective Scale (1 / Z)
+    // z=0 -> scale=1. z gets bigger -> scale gets smaller
+    const fov = 1.0;
+    const scale = fov / (fov + z * 0.1); 
+    
+    // Y Position
+    const y = horizonY + (hitY - horizonY) * scale;
+    
+    // X Position
+    // Lane Range: -1.5 to 1.5 (Center 0)
+    // Track Width varies by Z
+    const baseTrackW = W * 0.6; // Width at hitline
+    const laneW = baseTrackW / 4;
+    
+    const laneOffset = (lane - 1.5) * laneW;
+    const x = (W/2) + (laneOffset * scale);
+    const w = laneW * scale;
+    
+    return { x, y, w, s: scale };
+}
+
+function drawTrack() {
+    // Draw Lanes
+    ctx.lineWidth = 2;
+    ctx.strokeStyle = 'rgba(255,255,255,0.2)';
+    
+    for(let i=0; i<=4; i++) {
+        const p1 = project(i-0.5, 0); // Near
+        const p2 = project(i-0.5, 30); // Far
+        ctx.beginPath(); ctx.moveTo(p1.x - p1.w/2, p1.y); ctx.lineTo(p2.x - p2.w/2, p2.y); ctx.stroke();
+    }
+    
+    // Draw Hit Line
+    const l = project(-0.5, 0);
+    const r = project(3.5, 0);
+    ctx.strokeStyle = '#fff';
+    ctx.shadowBlur = 15;
+    ctx.shadowColor = varColor('--primary');
+    ctx.lineWidth = 4;
+    ctx.beginPath(); 
+    ctx.moveTo(l.x - l.w/2, l.y); 
+    ctx.lineTo(r.x + r.w/2, r.y); 
+    ctx.stroke();
+    ctx.shadowBlur = 0;
+    
+    // Key Press Feedback (Bottom of screen)
+    touchLanes.forEach((active, i) => {
+        if(active) {
+            const p = project(i, 0);
+            ctx.globalCompositeOperation = 'lighter';
+            ctx.fillStyle = `rgba(51, 213, 172, 0.4)`;
+            // Draw Trapezoid Beam
+            const pFar = project(i, 5);
+            ctx.beginPath();
+            ctx.moveTo(p.x - p.w/2, p.y);
+            ctx.lineTo(p.x + p.w/2, p.y);
+            ctx.lineTo(pFar.x + pFar.w/2, pFar.y);
+            ctx.lineTo(pFar.x - pFar.w/2, pFar.y);
+            ctx.fill();
+            ctx.globalCompositeOperation = 'source-over';
+        }
+    });
+}
+
+function drawNote(lane, z, type) {
+    const p = project(lane, z);
+    if(p.s < 0.1) return; // Too small
+    
+    const h = 20 * p.s;
+    const x = p.x - p.w * 0.48;
+    const y = p.y - h/2;
+    const w = p.w * 0.96;
+    
+    // Color
+    ctx.fillStyle = type==='tap' ? '#33d5ac' : (type==='long'?'#fdbb2d':'#ff007c');
+    
+    // Glow (expensive, only do if close)
+    // Using manual drawing instead of shadowBlur for perf
+    ctx.fillRect(x, y, w, h);
+    
+    // Shine
+    ctx.fillStyle = 'rgba(255,255,255,0.7)';
+    ctx.fillRect(x, y, w, h*0.3);
+}
+
+function drawLongNote(laneStart, laneEnd, zStart, zEnd) {
+    if (zStart >= zEnd) return;
+    
+    const p1 = project(laneStart, zStart);
+    const p2 = project(laneEnd, zEnd);
+    
+    ctx.fillStyle = 'rgba(253, 187, 45, 0.5)';
+    ctx.strokeStyle = 'rgba(255,255,255,0.5)';
+    ctx.lineWidth = 2 * p2.s;
+    
+    ctx.beginPath();
+    ctx.moveTo(p1.x - p1.w/2 + 2, p1.y);
+    ctx.lineTo(p1.x + p1.w/2 - 2, p1.y);
+    ctx.lineTo(p2.x + p2.w/2 - 2, p2.y);
+    ctx.lineTo(p2.x - p2.w/2 + 2, p2.y);
+    ctx.fill();
+    ctx.stroke();
+}
+
+function drawVisualizer() {
+    if(!analyzer) return;
+    const data = new Uint8Array(analyzer.frequencyBinCount);
+    analyzer.getByteFrequencyData(data);
+    
+    vCtx.clearRect(0,0,vCvs.width,vCvs.height);
+    const w = vCvs.width;
+    const h = vCvs.height;
+    const barW = (w / data.length) * 2.5;
+    
+    vCtx.fillStyle = 'rgba(255,255,255,0.15)';
+    for(let i=0; i<data.length; i++) {
+        const val = data[i];
+        const barH = (val / 255) * (h * 0.6);
+        vCtx.fillRect(i * barW, h - barH, barW - 1, barH);
+    }
+}
+
+// --- Input Handling (Corrected) ---
+function handleInput(lane) {
+    if(!isPlaying) return;
+    touchLanes[lane] = true;
+    
+    const now = audioCtx.currentTime;
+    const time = now - startTime;
+    
+    // Check nearest note in lane
+    const note = activeNotes.find(n => !n.processed && n.lane === lane && n.time - time < CONFIG.hitWindow.bad);
+    
+    if (note) {
+        const dt = Math.abs(note.time - time);
+        
+        // Window check
+        if (dt > CONFIG.hitWindow.bad) return; // Too early (ignore)
+        
+        // JUDGE
+        let j = 'MISS', pts = 0;
+        if (dt < CONFIG.hitWindow.perf) { j='PERFECT'; pts=500; }
+        else if (dt < CONFIG.hitWindow.great) { j='GREAT'; pts=300; }
+        else if (dt < CONFIG.hitWindow.good) { j='GOOD'; pts=100; }
+        else { j='BAD'; pts=0; }
+        
+        if (j !== 'BAD') {
+            if (note.type === 'long') {
+                note.holding = true;
+                note.hit = true; 
+            } else {
+                note.processed = true;
+                note.hit = true;
+            }
+            addScore(pts);
+            triggerJudge(j);
+        } else {
+            note.processed = true;
+            breakCombo();
+            triggerJudge(j);
+        }
+    }
+}
+
+function releaseInput(lane) {
+    touchLanes[lane] = false;
+    // Handle Long Note Release
+    const note = activeNotes.find(n => n.holding && n.lane === lane && !n.processed); // Simplified: Assume lane doesn't change for input logic simplicity
+    if (note) {
+         // Release logic check (if needed)
+         // For now, if you lift early, it breaks.
+         const now = audioCtx.currentTime - startTime;
+         if (now < note.time + note.dur - 0.2) {
+             note.holding = false;
+             note.processed = true;
+             breakCombo();
+             triggerJudge('MISS');
+         }
+    }
+}
+
+// Score & UI
+function addScore(pts, isHoldTick=false) {
+    if(!isHoldTick) combo++;
+    if(combo > maxCombo) maxCombo = combo;
+    score += pts * (1 + combo/500);
+    updateHUD();
+}
+function breakCombo() {
+    combo = 0;
+    life = Math.max(0, life - 50);
+    if(life === 0) endGame();
+    updateHUD();
+}
+function updateHUD() {
+    document.getElementById('score-disp').innerText = Math.floor(score).toString().padStart(7,'0');
+    document.getElementById('life-bar').style.width = (life/10) + '%';
+    document.getElementById('life-bar').style.background = life<300?'#d63031':'#00b894';
+}
+function triggerJudge(txt) {
+    const el = document.getElementById('judge-disp');
+    el.innerText = txt;
+    el.style.color = txt==='PERFECT'?'#fbc531':(txt==='GREAT'?'#e84118':(txt==='MISS'?'#7f8fa6':'#fff'));
+    el.style.opacity = 1;
+    el.style.transform = 'translate(-50%,-50%) scale(1.3)';
+    
+    // Anim reset
+    requestAnimationFrame(()=>{
+        el.style.transition = 'transform 0.1s, opacity 0.3s';
+        el.style.transform = 'translate(-50%,-50%) scale(1)';
+        setTimeout(()=>el.style.opacity=0, 300);
+    });
+    
+    if(combo>2) {
+        document.getElementById('combo-box').classList.add('show');
+        document.getElementById('combo-num').innerText = combo;
+    } else {
+        document.getElementById('combo-box').classList.remove('show');
+    }
+}
+
+function varColor(name) { return getComputedStyle(document.body).getPropertyValue(name); }
+
+// Events
+window.addEventListener('resize', resize);
+function resize() {
+    cvs.width = window.innerWidth; cvs.height = window.innerHeight;
+    vCvs.width = window.innerWidth; vCvs.height = window.innerHeight;
+}
+
+// Input Binding
+window.addEventListener('keydown', e => {
+    if(e.repeat) return;
+    const idx = CONFIG.inputKeys.indexOf(e.key.toLowerCase());
+    if(idx>=0) handleInput(idx);
+});
+window.addEventListener('keyup', e => {
+    const idx = CONFIG.inputKeys.indexOf(e.key.toLowerCase());
+    if(idx>=0) releaseInput(idx);
+});
+// Touch (Screen split into 4 columns)
+cvs.addEventListener('touchstart', e => {
+    e.preventDefault();
+    for(let i=0; i<e.changedTouches.length; i++) {
+        const x = e.changedTouches[i].clientX;
+        const lane = Math.floor(x / (window.innerWidth/4));
+        handleInput(lane);
+    }
+}, {passive:false});
+cvs.addEventListener('touchend', e => {
+    e.preventDefault();
+    for(let i=0; i<e.changedTouches.length; i++) {
+        const x = e.changedTouches[i].clientX;
+        const lane = Math.floor(x / (window.innerWidth/4));
+        releaseInput(lane);
+    }
+});
+
+</script>
+</body>
+</html>
