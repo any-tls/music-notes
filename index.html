@@ -429,7 +429,7 @@
 
 <script>
 /**
- * AI RHYTHM GAME - Enhanced Input Ver.
+ * AI RHYTHM GAME - Enhanced Long Note Handling
  */
 
 // --- Constants ---
@@ -437,8 +437,8 @@ const LANES = 4;
 const PERFECT_WINDOW = 0.050;
 const GREAT_WINDOW = 0.100;
 const GOOD_WINDOW = 0.150;
-// ロングノーツを離してしまっても、この時間内なら押し直せば継続できる（秒）
-const LONG_NOTE_GRACE_TIME = 0.200; 
+// 通常ノーツを叩くために一瞬離しても許される時間。これを超えるとMissになる。
+const GAP_WINDOW = 0.150; 
 
 // --- YouTube API Setup ---
 let player;
@@ -625,10 +625,12 @@ class RhythmGame {
                 return;
             }
 
-            // ノーツデータの初期化（lastReleaseTimeなどを追加）
+            // ノーツデータの初期化
             this.notes = JSON.parse(JSON.stringify(chartData));
             this.notes.forEach(n => {
                 n.lastReleaseTime = 0; // ロングノーツの中断時刻
+                n.missed = false; // ロングノーツの途中失敗フラグ
+                n.finished = false; // 処理完了フラグ
             });
             
             if (isYoutubeReady && player) {
@@ -664,7 +666,7 @@ class RhythmGame {
                 const lane = this.keyMap[e.code];
                 if (this.laneState[lane] === 0) {
                     this.handleInput(lane, 'down');
-                    this.laneState[lane] = 1; // キーボードはON/OFFなので1固定
+                    this.laneState[lane] = 1;
                 }
             }
         });
@@ -687,7 +689,7 @@ class RhythmGame {
                 const lane = this.getLaneFromX(t.clientX);
                 if (lane !== -1) {
                     this.handleInput(lane, 'down');
-                    this.laneState[lane]++; // タッチ数を増やす
+                    this.laneState[lane]++; 
                 }
             }
         }, { passive: false });
@@ -701,15 +703,13 @@ class RhythmGame {
                 const lane = this.getLaneFromX(t.clientX);
                 if (lane !== -1) {
                     this.handleInput(lane, 'up');
-                    this.laneState[lane] = Math.max(0, this.laneState[lane] - 1); // タッチ数を減らす
+                    this.laneState[lane] = Math.max(0, this.laneState[lane] - 1);
                 }
             }
         });
 
-        // キャンセル系イベント（画面外に出た等）
         this.canvas.addEventListener('touchcancel', (e) => {
              e.preventDefault();
-             // 全リセットは危険なので、changedTouches分だけ減らす
              for (let i = 0; i < e.changedTouches.length; i++) {
                 const t = e.changedTouches[i];
                 const lane = this.getLaneFromX(t.clientX);
@@ -768,57 +768,52 @@ class RhythmGame {
         const now = this.getCurrentTime();
 
         if (action === 'down') {
-            // 1. まず通常のヒット判定（未処理のノーツを探す）
+            // 1. 通常ノーツ（単押し・フリック・ロング始点）の判定
+            // 未処理で、ヒット範囲にあり、かつ終了していないもの
             const hittable = this.notes.filter(n => 
-                !n.hit && n.lane === lane && n.type !== 'end' &&
-                Math.abs(n.time - now) < GOOD_WINDOW + (n.type === 'long' ? 0 : 0)
+                !n.hit && !n.missed && n.lane === lane && n.type !== 'end' &&
+                Math.abs(n.time - now) < GOOD_WINDOW
             );
             
             // 手前にあるものを優先
             hittable.sort((a,b) => Math.abs(a.time - now) - Math.abs(b.time - now));
             
-            let hitAny = false;
-
+            let hitNormal = false;
             if (hittable.length > 0) {
                 const note = hittable[0];
                 if (note.type !== 'long') {
                     this.judge(note, now);
-                    hitAny = true;
+                    hitNormal = true;
                 } else {
-                    // ロングノーツの始点判定
-                    if (Math.abs(note.time - now) < GOOD_WINDOW) {
-                        note.holding = true;
-                        // 始点タップ時の判定表示
-                        this.showJudge('PERFECT'); 
-                        hitAny = true;
-                    }
+                    // ロングノーツ始点
+                    note.holding = true;
+                    this.judge(note, now); // 始点判定
+                    hitNormal = true;
                 }
             }
 
-            // 2. 「ロングノーツの復帰」判定 (Grace Period)
-            // 新しいノーツを叩いたとしても、あるいは叩けなかったとしても、
-            // 「今まさにGrace期間中のロングノーツ」があれば、それを復帰させる（再ホールド状態にする）
-            // これにより「一瞬離してタップ」が可能になる。
+            // 2. ロングノーツの復帰（GAP許容処理）
+            // すでにHit済みで、現在ホールドしておらず、まだ終了しておらず、ミスになっていないロングノーツ
             const suspendedNotes = this.notes.filter(n => 
                 n.hit && n.type === 'long' && 
-                !n.holding && // 今持っていない
-                (now < n.time + n.length) && // まだ終わっていない
-                (now - n.lastReleaseTime < LONG_NOTE_GRACE_TIME) // 離してから時間が経っていない
+                !n.holding && !n.finished && !n.missed &&
+                n.lane === lane &&
+                (now < n.time + n.length)
             );
 
-            // 同じレーンのロングノーツがあれば復帰
+            // 復帰判定: GAP_WINDOW内であれば復帰させる
             suspendedNotes.forEach(n => {
-                if (n.lane === lane) {
+                if (now - n.lastReleaseTime <= GAP_WINDOW) {
                     n.holding = true;
-                    // 必要ならエフェクトなどを出すが、ログは出さない
+                    // 通常ノーツを叩くためのリリースだった場合、ここで再開される
                 }
             });
 
         } else if (action === 'up') {
             // ロングノーツを離した処理
-            // 即座にMISSにせず、holding=false にして lastReleaseTime を記録するだけにする
+            // 即座にMISSにせず、holding=false にして lastReleaseTime を記録する
             const activeLongs = this.notes.filter(n => 
-                n.hit && n.type === 'long' && n.holding && n.lane === lane
+                n.hit && n.type === 'long' && n.holding && n.lane === lane && !n.finished
             );
             
             activeLongs.forEach(n => {
@@ -941,6 +936,7 @@ class RhythmGame {
             return { x, y, scale };
         };
 
+        // Track Background
         const btmL = project(trackX, 0);
         const btmR = project(trackX + trackW, 0);
         const topL = project(trackX, 100); 
@@ -958,6 +954,7 @@ class RhythmGame {
         this.ctx.lineTo(topL.x, topL.y);
         this.ctx.fill();
 
+        // Track Lines
         this.ctx.strokeStyle = 'rgba(57, 197, 187, 0.3)';
         this.ctx.lineWidth = 2;
         for(let i=0; i<=LANES; i++) {
@@ -969,6 +966,7 @@ class RhythmGame {
             this.ctx.stroke();
         }
 
+        // Judge Line
         this.ctx.strokeStyle = '#fff';
         this.ctx.lineWidth = 4;
         this.ctx.beginPath();
@@ -978,7 +976,7 @@ class RhythmGame {
 
         // Active Lane Effect
         for(let i=0; i<LANES; i++) {
-            if(this.laneState[i] > 0) { // 1以上なら押されている
+            if(this.laneState[i] > 0) {
                 const p1 = project(trackX + i*laneW, 0);
                 const p2 = project(trackX + (i+1)*laneW, 0);
                 const p3 = project(trackX + i*laneW, 0.5); 
@@ -1001,47 +999,46 @@ class RhythmGame {
         }
 
         this.notes.forEach(note => {
-            // ロングノーツの「離され判定」チェック (Grace Period Expiry)
-            if (note.hit && note.type === 'long' && !note.holding) {
-                // 終了時間前なのに、離してからGrace時間を過ぎた場合 -> MISS
-                if (now < note.time + note.length) {
-                    if (now - note.lastReleaseTime > LONG_NOTE_GRACE_TIME) {
-                        // ここで初めてコンボを切る
-                        note.holding = false; // 念のため
-                        // 一度ミス扱いにすると再描画されなくなるので、
-                        // 実際には note.hit を維持しつつ、コンボを切る処理だけ呼ぶのが一般的だが、
-                        // ここでは「失敗したロングノーツ」として処理を止める。
-                        // 簡易的に note.type='missed_long' のように変えるか、もう描画しないか。
-                        // 今回は描画ループで弾かれるように終了時間を書き換えるなどのハックもできるが、
-                        // シンプルにBreakComboして、以降の判定を無効にする。
-                        // ただし、すでにhit=trueなので、描画ロジックによっては消えてしまう。
-                        // 「途中失敗」を可視化するのは難しいので、コンボを切って判定終了とする。
-                        // note.hit はすでにTrue。
-                        // 強制的に終了させる
-                        note.time = -999; 
-                        note.length = 0; 
+            // ロングノーツの状態監視ロジック
+            if (note.type === 'long' && note.hit && !note.finished && !note.missed) {
+                const endTime = note.time + note.length;
+
+                // A. 終了時間を超えた場合 -> 成功で終了
+                if (now >= endTime) {
+                    note.finished = true;
+                    // 最後のボーナススコア（判定扱い）
+                    this.addScore('PERFECT');
+                    return; 
+                }
+
+                // B. 離されている状態のチェック
+                if (!note.holding) {
+                    // GAP_WINDOW を超えて離されているか？
+                    if (now - note.lastReleaseTime > GAP_WINDOW) {
+                        // タイムアウト -> ミスにする
                         this.breakCombo();
+                        note.missed = true;
+                        note.finished = true; // 描画もしない
                         return;
                     }
                 } else {
-                    // 終了時間を超えた場合、Grace期間内なら成功とみなす
-                     // 何もしなくてOK（下流の描画ロジックで消える）
+                    // C. ホールド中 -> 継続的に判定（コンボは増やさないが、生きてることを示す）
+                    // 本格的な音ゲーではここでTickスコアが入るが、今回は視覚効果のみ維持
                 }
             }
 
-            if (note.hit && note.type !== 'long') return;
-            // ロングノーツで、終了時間を過ぎていて、かつホールド中かGrace期間内なら非表示へ
-            if (note.hit && note.type === 'long') {
-                const isFinished = now > note.time + note.length;
-                if (isFinished) return; 
-            }
+            // 描画スキップ条件
+            if (note.finished || note.missed) return; // 終了または失敗したノーツは描画しない
+            if (note.hit && note.type !== 'long') return; // ロング以外でHit済みなら描画しない
             
             const dt = note.time - now;
             
+            // 描画範囲外
             if (dt > 10.0 / (this.noteSpeed/2)) return; 
             
+            // Miss判定（通り過ぎた）
             if (dt < -0.2 && note.type !== 'long') {
-                if(!note.hit) { note.hit = true; this.breakCombo(); }
+                if(!note.hit) { note.hit = true; note.missed = true; this.breakCombo(); }
                 return;
             }
             if (note.type === 'end' && dt < 0) { this.finishGame(); return; }
@@ -1052,12 +1049,13 @@ class RhythmGame {
             // --- ロングノーツの描画 ---
             if (note.type === 'long') {
                 const dtTail = (note.time + note.length) - now;
-                // 完全に通り過ぎたらリターン
-                if (dtTail < 0) return; 
+                if (dtTail < 0) return; // 末尾も通り過ぎた
 
-                // 描画上の始点時間差（ホールド中なら0=判定ライン、離していてもGrace中なら0に粘らせるか、離れた位置にするか）
-                // ここでは「離すと奥へ行ってしまう」見た目にする（押さないとズレていく）
-                const effDt = (note.holding) ? 0 : Math.max(0, dt);
+                // Hit済みなら判定ライン(0)から、未Hitなら現在位置(dt)から
+                // ただし、Gap待機中(!holding)の場合、奥に逃げるのではなく「判定ラインで止まって待ってる」表現にするか、
+                // あるいは「判定ラインから少し離れた」表現にするか。
+                // ここでは「判定ラインに張り付いている」表現にする（ユーザーに押し直しを促すため）
+                const effDt = (note.hit) ? 0 : Math.max(0, dt);
                 
                 const headP = project(laneX, effDt);
                 const headPR = project(laneX + laneW, effDt);
@@ -1065,11 +1063,11 @@ class RhythmGame {
                 const tailPR = project(laneX + laneW, dtTail);
 
                 if (headP && tailP) {
-                    // 離しているがGrace期間中の場合は色を変える（警告色）
+                    // ホールド中: 明るい色 / 離し中（Gap内）: 暗い色または警告色
                     if (note.hit && !note.holding) {
-                        this.ctx.fillStyle = 'rgba(255, 100, 100, 0.7)';
+                        this.ctx.fillStyle = 'rgba(255, 100, 100, 0.6)'; // 警告色
                     } else {
-                        this.ctx.fillStyle = 'rgba(57, 197, 187, 0.7)';
+                        this.ctx.fillStyle = 'rgba(57, 197, 187, 0.7)'; // 通常色
                     }
                     
                     this.ctx.beginPath();
@@ -1082,9 +1080,9 @@ class RhythmGame {
             }
 
             // --- ノーツ（頭）の描画 ---
-            if (!note.hit || (note.type === 'long' && note.holding)) {
-                const renderDt = (note.holding) ? 0 : dt;
-                
+            // ロングノーツでHit済みの場合は頭を描画しない（帯だけ）
+            if (!note.hit) {
+                const renderDt = dt;
                 if (renderDt < -0.1) return;
 
                 const p = project(laneX, renderDt);
