@@ -5,3 +5,4 @@ OurBrightParade(https://www.youtube.com/watch?v=k0usYxw3pko,OurBrightParade.json
 ColorRiseHarmony(https://www.youtube.com/watch?v=oc7xMNpxUOM,ColorRiseHarmony.json),
 KONKONBeats-白上フブキ(https://www.youtube.com/watch?v=c2hbKnXIa_c,KONKONBeats-白上フブキ.json),
 LETTER☆彡-白上フブキ(https://www.youtube.com/watch?v=I7CY960FEPo,LETTER☆彡-白上フブキ.json),
+SUPERNOVA-白上フブキ(https://www.youtube.com/watch?v=0RG7iNERF4s,SUPERNOVA-白上フブキ.json),
