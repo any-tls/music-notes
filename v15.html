@@ -1,0 +1,1043 @@
+<!DOCTYPE html>
+<html lang="ja">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
+    <title>AI Rhythm Game</title>
+    <style>
+        @import url('https://fonts.googleapis.com/css2?family=Exo+2:wght@400;700;900&display=swap');
+
+        :root {
+            --primary: #39c5bb;
+            --accent: #ff0055;
+            --bg: #121212;
+            --text: #ffffff;
+        }
+
+        * {
+            box-sizing: border-box;
+            user-select: none;
+            -webkit-user-select: none;
+            -webkit-touch-callout: none;
+            -webkit-tap-highlight-color: transparent;
+        }
+
+        body, html {
+            margin: 0;
+            padding: 0;
+            width: 100%;
+            height: 100%;
+            overflow: hidden;
+            background-color: var(--bg);
+            font-family: 'Exo 2', sans-serif;
+            color: var(--text);
+        }
+
+        /* --- LAYER 0: Background --- */
+        #background-layer {
+            position: absolute;
+            top: 0;
+            left: 0;
+            width: 100%;
+            height: 100%;
+            z-index: 0;
+            overflow: hidden;
+            display: flex;
+            justify-content: center;
+            align-items: center;
+            background: #000;
+        }
+
+        #background-video {
+            width: 100%;
+            height: 100%;
+            object-fit: cover;
+            opacity: 0.6;
+        }
+
+        #visualizer-canvas {
+            position: absolute;
+            width: 100%;
+            height: 100%;
+            opacity: 0.5;
+        }
+
+        /* --- LAYER 10: Game Canvas --- */
+        #game-layer {
+            position: absolute;
+            top: 0;
+            left: 0;
+            width: 100%;
+            height: 100%;
+            z-index: 10;
+        }
+
+        /* --- LAYER 20: In-Game UI (Floating) --- */
+        #ui-layer {
+            position: absolute;
+            top: 0;
+            left: 0;
+            width: 100%;
+            height: 100%;
+            z-index: 20;
+            pointer-events: none; /* Let clicks pass to canvas/buttons */
+        }
+
+        /* HUD Elements */
+        .hud-element {
+            position: absolute;
+            pointer-events: auto;
+        }
+
+        #life-container {
+            top: 20px;
+            left: 20px;
+            width: 250px;
+            height: 15px;
+            background: rgba(0,0,0,0.5);
+            border: 2px solid #fff;
+            border-radius: 10px;
+            overflow: hidden;
+        }
+
+        #life-bar {
+            width: 100%;
+            height: 100%;
+            background: #4caf50;
+            transition: width 0.2s, background 0.2s;
+        }
+
+        #score-display {
+            top: 15px;
+            right: 20px;
+            font-size: 1.8rem;
+            font-weight: 900;
+            text-shadow: 2px 2px 0 #000;
+            text-align: right;
+        }
+
+        #btn-quit {
+            top: 50px;
+            left: 20px;
+            background: rgba(255, 50, 50, 0.8);
+            border: 1px solid #fff;
+            color: white;
+            padding: 5px 15px;
+            border-radius: 5px;
+            font-weight: bold;
+            font-size: 0.9rem;
+            cursor: pointer;
+            text-transform: uppercase;
+        }
+
+        #combo-container {
+            top: 35%;
+            left: 50%;
+            transform: translate(-50%, -50%);
+            text-align: center;
+            display: none;
+        }
+
+        #combo-count {
+            font-size: 4.5rem;
+            font-weight: 900;
+            background: linear-gradient(to bottom, #fff, var(--primary));
+            -webkit-background-clip: text;
+            -webkit-text-fill-color: transparent;
+            line-height: 1;
+            filter: drop-shadow(0 0 5px rgba(57,197,187,0.5));
+        }
+
+        #combo-label {
+            font-size: 1.2rem;
+            letter-spacing: 5px;
+            color: var(--primary);
+            font-weight: bold;
+            text-shadow: 0 0 5px rgba(0,0,0,0.8);
+        }
+
+        #judge-display {
+            top: 60%;
+            left: 50%;
+            transform: translate(-50%, -50%);
+            font-size: 2.5rem;
+            font-weight: 900;
+            text-shadow: 0 0 10px rgba(0,0,0,0.8);
+            opacity: 0;
+        }
+
+        .judge-perfect { color: #ffeb3b; }
+        .judge-great { color: #e91e63; }
+        .judge-good { color: #2196f3; }
+        .judge-miss { color: #9e9e9e; }
+
+        /* --- LAYER 100: Screens (Title/Result) --- */
+        .screen-container {
+            position: absolute;
+            top: 0;
+            left: 0;
+            width: 100%;
+            height: 100%;
+            z-index: 100;
+            pointer-events: none; 
+        }
+
+        .screen {
+            position: absolute;
+            width: 100%;
+            height: 100%;
+            display: flex;
+            flex-direction: column;
+            justify-content: center;
+            align-items: center;
+            background: rgba(0,0,0,0.9);
+            transition: opacity 0.5s;
+            pointer-events: auto;
+        }
+
+        .hidden {
+            opacity: 0;
+            pointer-events: none !important;
+            visibility: hidden;
+        }
+
+        /* UI Components */
+        h1 { font-style: italic; text-transform: uppercase; letter-spacing: 2px; text-shadow: 0 0 10px var(--primary); margin: 0 0 20px 0; font-size: 3rem; }
+
+        .btn {
+            background: linear-gradient(45deg, var(--primary), #2a9d8f);
+            border: 2px solid #fff;
+            color: white;
+            padding: 15px 40px;
+            font-size: 1.2rem;
+            font-weight: bold;
+            border-radius: 30px;
+            cursor: pointer;
+            text-transform: uppercase;
+            box-shadow: 0 0 15px var(--primary);
+            transition: transform 0.1s, background 0.2s;
+            margin: 10px;
+            pointer-events: auto;
+            display: inline-block;
+            text-align: center;
+        }
+        .btn:active { transform: scale(0.95); }
+        .btn:disabled { background: #555; box-shadow: none; cursor: not-allowed; opacity: 0.7; }
+
+        #file-input { display: none; }
+
+        .settings-group {
+            background: rgba(255,255,255,0.1);
+            padding: 20px;
+            border-radius: 10px;
+            margin: 10px;
+            text-align: center;
+            width: 90%;
+            max-width: 500px;
+            backdrop-filter: blur(5px);
+        }
+
+        label { display: block; margin-bottom: 5px; font-weight: bold; color: var(--primary); }
+        select, input[type=range] {
+            width: 100%;
+            padding: 10px;
+            margin-bottom: 15px;
+            background: #222;
+            color: white;
+            border: 1px solid var(--primary);
+            border-radius: 5px;
+        }
+
+        /* Loading Bar */
+        #loading-bar-container {
+            width: 60%;
+            height: 5px;
+            background: #333;
+            margin-top: 20px;
+        }
+        #loading-bar { width: 0%; height: 100%; background: var(--primary); transition: width 0.1s; }
+
+        /* Responsive */
+        @media (orientation: landscape) {
+            .settings-group { display: grid; grid-template-columns: 1fr 1fr; gap: 10px; width: 80%; }
+        }
+    </style>
+</head>
+<body>
+
+    <div id="background-layer">
+        <canvas id="visualizer-canvas"></canvas>
+        <video id="background-video" playsinline muted loop style="display:none;"></video>
+    </div>
+
+    <canvas id="game-layer"></canvas>
+
+    <div id="ui-layer" class="hidden">
+        <div id="life-container" class="hud-element">
+            <div id="life-bar"></div>
+        </div>
+        
+        <button id="btn-quit" class="hud-element">QUIT</button>
+
+        <div id="score-display" class="hud-element">SCORE: <span id="score-val">0</span></div>
+
+        <div id="combo-container" class="hud-element">
+            <div id="combo-count">0</div>
+            <div id="combo-label">COMBO</div>
+        </div>
+        <div id="judge-display" class="hud-element">PERFECT</div>
+    </div>
+
+    <div class="screen-container">
+        
+        <div id="title-screen" class="screen">
+            <img src="https://example.com/logo.png" alt="GAME LOGO" id="logo-img" style="max-width:300px; margin-bottom:20px;" onerror="this.style.display='none'">
+            <h1>AI RHYTHM</h1>
+            
+            <div class="settings-group">
+                <div style="grid-column: 1 / -1;">
+                    <label>MUSIC FILE</label>
+                    <button class="btn" id="file-select-btn" style="width: 100%; margin:0 0 10px 0;">SELECT FILE</button>
+                    <input type="file" id="file-input" accept="audio/*,video/*">
+                    <div id="file-name" style="font-size:0.9rem; color:#aaa; margin-bottom:10px;">No file selected</div>
+                </div>
+
+                <div>
+                    <label>DIFFICULTY</label>
+                    <select id="diff-select">
+                        <option value="0">EASY</option>
+                        <option value="1">NORMAL</option>
+                        <option value="2">HARD</option>
+                        <option value="3">EXPERT</option>
+                        <option value="4">MASTER</option>
+                    </select>
+                </div>
+                
+                <div>
+                    <label>SPEED: <span id="speed-val">8.0</span></label>
+                    <input type="range" id="speed-range" min="1" max="15" step="0.5" value="8.0">
+                </div>
+            </div>
+
+            <button id="start-btn" class="btn" disabled>GAME START</button>
+        </div>
+
+        <div id="loading-screen" class="screen hidden">
+            <h2>ANALYZING...</h2>
+            <div id="loading-text">Generating Chart</div>
+            <div id="loading-bar-container"><div id="loading-bar"></div></div>
+        </div>
+
+        <div id="result-screen" class="screen hidden">
+            <h2 id="res-title" style="font-size:3rem; margin-bottom:10px;">FULL COMBO!</h2>
+            <div style="font-size:1.5rem;">SCORE: <span id="result-score">0</span></div>
+            <div style="font-size:1.2rem; margin:10px;">MAX COMBO: <span id="result-combo">0</span></div>
+            <div style="display:grid; grid-template-columns: 1fr 1fr; gap:15px; text-align:left; margin:20px; background:rgba(255,255,255,0.1); padding:20px; border-radius:10px;">
+                <div class="judge-perfect">PERFECT</div><div id="res-perf">0</div>
+                <div class="judge-great">GREAT</div><div id="res-great">0</div>
+                <div class="judge-good">GOOD</div><div id="res-good">0</div>
+                <div class="judge-miss">MISS</div><div id="res-miss">0</div>
+            </div>
+            <button class="btn" onclick="game.returnToTitle()">BACK TO TITLE</button>
+        </div>
+
+    </div>
+
+<script>
+/**
+ * AI RHYTHM GAME - Optimized Version
+ */
+
+// --- Constants ---
+const LANES = 4;
+// Increased lookahead for "further" draw distance
+const LOOKAHEAD_BASE = 5.0; 
+const JUDGE_LINE_Y_POS = 0.90; // Lower on screen (90% down)
+const PERFECT_WINDOW = 0.050;
+const GREAT_WINDOW = 0.100;
+const GOOD_WINDOW = 0.150;
+
+// PRNG for Deterministic Charts
+class PseudoRandom {
+    constructor(seed) {
+        this.seed = seed % 2147483647;
+        if (this.seed <= 0) this.seed += 2147483646;
+    }
+    next() { return this.seed = this.seed * 16807 % 2147483647; }
+    nextFloat() { return (this.next() - 1) / 2147483646; }
+}
+
+class RhythmGame {
+    constructor() {
+        this.audioCtx = null;
+        this.audioBuffer = null;
+        this.sourceNode = null;
+        this.analyser = null;
+        this.videoEl = document.getElementById('background-video');
+        
+        // Game State
+        this.notes = [];
+        this.score = 0;
+        this.combo = 0;
+        this.maxCombo = 0;
+        this.life = 1000;
+        this.isPlaying = false;
+        this.startTime = 0;
+        this.noteSpeed = 8.0;
+        this.difficulty = 1;
+        this.stats = { perfect:0, great:0, good:0, miss:0 };
+        
+        // Inputs
+        this.keyMap = { 'KeyD':0, 'KeyF':1, 'KeyJ':2, 'KeyK':3 };
+        this.laneState = [false, false, false, false];
+        
+        // Rendering Dimensions (calculated in resize)
+        this.canvas = document.getElementById('game-layer');
+        this.ctx = this.canvas.getContext('2d');
+        this.visCanvas = document.getElementById('visualizer-canvas');
+        this.visCtx = this.visCanvas.getContext('2d');
+        
+        this.trackDims = { x:0, w:0, laneW:0 };
+
+        this.resize();
+        window.addEventListener('resize', () => this.resize());
+        this.bindInputs();
+    }
+
+    resize() {
+        this.canvas.width = window.innerWidth;
+        this.canvas.height = window.innerHeight;
+        this.visCanvas.width = window.innerWidth;
+        this.visCanvas.height = window.innerHeight;
+
+        // Calculate Track Dimensions for both Render and Input
+        // Max width 800px, or screen width
+        const trackW = Math.min(this.canvas.width, 800);
+        const trackX = (this.canvas.width - trackW) / 2;
+        
+        this.trackDims = {
+            x: trackX,
+            w: trackW,
+            laneW: trackW / LANES
+        };
+    }
+
+    bindInputs() {
+        // Keyboard
+        window.addEventListener('keydown', (e) => {
+            if (!this.isPlaying) return;
+            if (e.code === 'Escape') this.stopGame();
+            if (e.code in this.keyMap) {
+                const lane = this.keyMap[e.code];
+                if (!this.laneState[lane]) {
+                    this.handleInput(lane, 'down');
+                    this.laneState[lane] = true;
+                }
+            }
+        });
+        window.addEventListener('keyup', (e) => {
+            if (!this.isPlaying) return;
+            if (e.code in this.keyMap) {
+                const lane = this.keyMap[e.code];
+                this.handleInput(lane, 'up');
+                this.laneState[lane] = false;
+            }
+        });
+
+        // Touch - Global Listener with Coordinate Calculation
+        // This fixes the "Tap area doesn't match lane" issue
+        this.canvas.addEventListener('touchstart', (e) => {
+            e.preventDefault();
+            if (!this.isPlaying) return;
+            
+            for (let i = 0; i < e.changedTouches.length; i++) {
+                const t = e.changedTouches[i];
+                const lane = this.getLaneFromX(t.clientX);
+                if (lane !== -1) {
+                    this.handleInput(lane, 'down');
+                    this.laneState[lane] = true;
+                }
+            }
+        }, { passive: false });
+
+        this.canvas.addEventListener('touchend', (e) => {
+            e.preventDefault();
+            if (!this.isPlaying) return;
+
+            for (let i = 0; i < e.changedTouches.length; i++) {
+                const t = e.changedTouches[i];
+                const lane = this.getLaneFromX(t.clientX);
+                if (lane !== -1) {
+                    this.handleInput(lane, 'up');
+                    this.laneState[lane] = false;
+                }
+            }
+        });
+
+        // Quit Button
+        document.getElementById('btn-quit').addEventListener('click', () => {
+            this.stopGame();
+        });
+    }
+
+    getLaneFromX(x) {
+        // Only accept touches in the bottom half to avoid accidental touches
+        // (optional, but good for UI overlap prevention)
+        // Calculating lane based on current Track Dimensions
+        if (x < this.trackDims.x || x > this.trackDims.x + this.trackDims.w) return -1;
+        return Math.floor((x - this.trackDims.x) / this.trackDims.laneW);
+    }
+
+    async loadFile(file) {
+        document.getElementById('title-screen').classList.add('hidden');
+        document.getElementById('loading-screen').classList.remove('hidden');
+
+        if (!this.audioCtx) this.audioCtx = new (window.AudioContext || window.webkitAudioContext)();
+        if (this.audioCtx.state === 'suspended') await this.audioCtx.resume();
+        
+        const url = URL.createObjectURL(file);
+        if (file.type.startsWith('video')) {
+            this.videoEl.src = url;
+            this.videoEl.style.display = 'block';
+            this.videoEl.load();
+        } else {
+            this.videoEl.style.display = 'none';
+        }
+
+        const arrayBuffer = await file.arrayBuffer();
+        
+        // Simple hashing for consistent charts
+        const seedStr = file.name + file.size;
+        let seedVal = 0;
+        for (let i=0; i<seedStr.length; i++) seedVal += seedStr.charCodeAt(i);
+        
+        try {
+            this.audioBuffer = await this.audioCtx.decodeAudioData(arrayBuffer);
+            this.generateChart(this.audioBuffer, seedVal);
+            this.startGame();
+        } catch (e) {
+            alert("Audio decode failed.");
+            this.returnToTitle();
+        }
+    }
+
+    generateChart(buffer, seed) {
+        document.getElementById('loading-text').innerText = "Generating Pattern...";
+        this.notes = [];
+        const rawData = buffer.getChannelData(0);
+        const sampleRate = buffer.sampleRate;
+        const rng = new PseudoRandom(seed);
+        
+        const d = this.difficulty;
+        // Difficulty Tuning
+        const threshold = [0.15, 0.12, 0.09, 0.06, 0.04][d]; 
+        const minStep = [0.5, 0.4, 0.25, 0.15, 0.1][d]; 
+        
+        // Use a window to find peaks
+        const stepSize = Math.floor(sampleRate * 0.05); // 50ms
+        let lastTime = -10;
+
+        for (let i = 0; i < rawData.length; i += stepSize) {
+            // Calculate approximate volume in window
+            let sum = 0;
+            let count = 0;
+            // Optimization: check every 8th sample
+            for (let j = 0; j < stepSize; j+=8) { 
+                if (i+j < rawData.length) {
+                    sum += Math.abs(rawData[i+j]);
+                    count++;
+                }
+            }
+            const vol = sum / count;
+            const time = i / sampleRate;
+
+            if (vol > threshold && (time - lastTime) >= minStep) {
+                // Determine Note Type
+                const lane = Math.floor(rng.nextFloat() * LANES);
+                let type = 'tap';
+                let len = 0;
+                
+                const r = rng.nextFloat();
+                if (r > 0.90 - (d*0.02)) { // Long Note
+                    type = 'long';
+                    len = 0.2 + rng.nextFloat() * 2.0;
+                } else if (r < 0.1 + (d*0.05)) { // Flick
+                    type = 'flick';
+                }
+
+                this.notes.push({
+                    time: time,
+                    lane: lane,
+                    type: type,
+                    length: len,
+                    hit: false,
+                    holding: false
+                });
+                lastTime = time;
+            }
+        }
+        
+        this.notes.sort((a,b) => a.time - b.time);
+        this.notes.push({ time: buffer.duration + 3, lane: 0, type: 'end', length:0 });
+    }
+
+    startGame() {
+        document.getElementById('loading-screen').classList.add('hidden');
+        document.getElementById('ui-layer').classList.remove('hidden');
+        
+        this.score = 0;
+        this.combo = 0;
+        this.life = 1000;
+        this.stats = { perfect:0, great:0, good:0, miss:0 };
+        this.updateHUD();
+
+        this.sourceNode = this.audioCtx.createBufferSource();
+        this.sourceNode.buffer = this.audioBuffer;
+        this.analyser = this.audioCtx.createAnalyser();
+        this.analyser.fftSize = 256;
+        this.sourceNode.connect(this.analyser);
+        this.analyser.connect(this.audioCtx.destination);
+        
+        // Delay start by 2 seconds for preparation
+        this.startTime = this.audioCtx.currentTime + 2.0; 
+        this.sourceNode.start(this.startTime);
+        
+        if (this.videoEl.style.display !== 'none') {
+            this.videoEl.currentTime = 0;
+            // Sync video
+            setTimeout(() => {
+                if(this.isPlaying) this.videoEl.play();
+            }, 2000);
+        }
+
+        this.isPlaying = true;
+        this.loop();
+    }
+
+    stopGame() {
+        this.isPlaying = false;
+        if (this.sourceNode) {
+            try { this.sourceNode.stop(); } catch(e){}
+        }
+        if (this.videoEl) this.videoEl.pause();
+        this.returnToTitle();
+    }
+
+    returnToTitle() {
+        document.getElementById('result-screen').classList.add('hidden');
+        document.getElementById('ui-layer').classList.add('hidden');
+        document.getElementById('title-screen').classList.remove('hidden');
+        this.ctx.clearRect(0,0,this.canvas.width, this.canvas.height);
+        this.visCtx.clearRect(0,0,this.visCanvas.width, this.visCanvas.height);
+    }
+
+    handleInput(lane, action) {
+        const now = this.getCurrentTime();
+        
+        // Find hittable note
+        const hittable = this.notes.filter(n => 
+            !n.hit && n.lane === lane && n.type !== 'end' &&
+            Math.abs(n.time - now) < GOOD_WINDOW + n.length
+        );
+
+        if (hittable.length === 0) return;
+        
+        // Sort by closest time
+        hittable.sort((a,b) => Math.abs(a.time - now) - Math.abs(b.time - now));
+        const note = hittable[0];
+
+        if (action === 'down') {
+            if (note.type !== 'long') {
+                this.judge(note, now);
+            } else {
+                // Long note start
+                if (Math.abs(note.time - now) < GOOD_WINDOW) {
+                    note.holding = true;
+                    this.showJudge('PERFECT');
+                }
+            }
+        } else if (action === 'up') {
+            if (note.type === 'long' && note.holding) {
+                // Long note release
+                const releaseTime = note.time + note.length;
+                this.judge(note, now, releaseTime);
+            } else if (note.type === 'long' && !note.holding) {
+                 // Released too early before holding properly
+                 // Do nothing or miss? Let's be lenient.
+            }
+        }
+    }
+
+    judge(note, now, targetTime = null) {
+        const target = targetTime || note.time;
+        const diff = Math.abs(target - now);
+        
+        let grade = 'MISS';
+        if (diff <= PERFECT_WINDOW) grade = 'PERFECT';
+        else if (diff <= GREAT_WINDOW) grade = 'GREAT';
+        else if (diff <= GOOD_WINDOW) grade = 'GOOD';
+
+        if (grade !== 'MISS') {
+            note.hit = true;
+            this.addScore(grade);
+        } else {
+            note.hit = true;
+            this.breakCombo();
+        }
+    }
+
+    addScore(grade) {
+        this.combo++;
+        if(this.combo > this.maxCombo) this.maxCombo = this.combo;
+        
+        let val = 500;
+        if (grade === 'PERFECT') val = 1000;
+        if (grade === 'GREAT') val = 800;
+        
+        this.score += Math.floor(val * (1 + Math.min(this.combo, 100) * 0.01));
+        
+        if (grade==='PERFECT') this.stats.perfect++;
+        else if (grade==='GREAT') this.stats.great++;
+        else this.stats.good++;
+
+        this.life = Math.min(1000, this.life + 15);
+        this.showJudge(grade);
+        this.updateHUD();
+    }
+
+    breakCombo() {
+        this.combo = 0;
+        this.stats.miss++;
+        this.life = Math.max(0, this.life - 50);
+        this.showJudge('MISS');
+        this.updateHUD();
+    }
+
+    showJudge(text) {
+        const el = document.getElementById('judge-display');
+        el.innerText = text;
+        el.className = 'judge-' + text.toLowerCase() + ' hud-element';
+        
+        el.style.animation = 'none';
+        el.offsetHeight; 
+        el.style.animation = 'pop 0.2s forwards';
+        el.style.opacity = 1;
+
+        const c = document.getElementById('combo-container');
+        if (this.combo > 1) {
+            document.getElementById('combo-count').innerText = this.combo;
+            c.style.display = 'block';
+            c.style.animation = 'none';
+            c.offsetHeight;
+            c.style.animation = 'bump 0.1s';
+        } else {
+            c.style.display = 'none';
+        }
+    }
+
+    updateHUD() {
+        document.getElementById('score-val').innerText = this.score;
+        const bar = document.getElementById('life-bar');
+        bar.style.width = (this.life / 10) + '%';
+        bar.style.background = this.life > 300 ? '#4caf50' : '#f44336';
+    }
+
+    getCurrentTime() {
+        if(!this.audioCtx) return 0;
+        return this.audioCtx.currentTime - this.startTime;
+    }
+
+    finishGame() {
+        this.isPlaying = false;
+        document.getElementById('ui-layer').classList.add('hidden');
+        document.getElementById('result-screen').classList.remove('hidden');
+        
+        const title = this.stats.miss === 0 ? "FULL COMBO!" : "FINISH";
+        document.getElementById('res-title').innerText = title;
+        document.getElementById('result-score').innerText = this.score;
+        document.getElementById('result-combo').innerText = this.maxCombo;
+        document.getElementById('res-perf').innerText = this.stats.perfect;
+        document.getElementById('res-great').innerText = this.stats.great;
+        document.getElementById('res-good').innerText = this.stats.good;
+        document.getElementById('res-miss').innerText = this.stats.miss;
+    }
+
+    // --- RENDER LOOP ---
+    loop() {
+        if (!this.isPlaying) return;
+        requestAnimationFrame(() => this.loop());
+
+        const now = this.getCurrentTime();
+        
+        // 1. Draw Visualizer
+        this.drawVisualizer();
+
+        // 2. Clear Game Canvas
+        this.ctx.clearRect(0,0, this.canvas.width, this.canvas.height);
+
+        // 3. Perspective Projection Logic (Lower Camera, Further View)
+        const w = this.canvas.width;
+        const h = this.canvas.height;
+        const { x: trackX, w: trackW, laneW } = this.trackDims;
+
+        // Projection Helper
+        // Z: 0 = Player Line, 1 = Horizon (Infinity)
+        const project = (x, z) => {
+            // Horizon Height: 15% from top (Looks like camera is lower, looking forward)
+            const farY = h * 0.15; 
+            // Player Height: 90% from top
+            const nearY = h * JUDGE_LINE_Y_POS;
+            
+            // Linear interpolation for Y
+            const currentY = nearY - (nearY - farY) * z;
+            
+            // Perspective Scaling
+            // At z=0, scale=1. At z=1, scale=0.05 (almost point)
+            const scale = 1 - 0.95 * z; 
+            
+            const centerX = w / 2;
+            const currentX = centerX + (x - centerX) * scale;
+            
+            return { x: currentX, y: currentY, scale: scale };
+        };
+
+        // Draw Track Background
+        const btmL = project(trackX, 0);
+        const btmR = project(trackX + trackW, 0);
+        const topL = project(trackX, 1);
+        const topR = project(trackX + trackW, 1);
+        
+        const grad = this.ctx.createLinearGradient(0, topL.y, 0, btmL.y);
+        grad.addColorStop(0, 'rgba(0,0,0,0)');
+        grad.addColorStop(1, 'rgba(0, 20, 30, 0.9)');
+        this.ctx.fillStyle = grad;
+        
+        this.ctx.beginPath();
+        this.ctx.moveTo(btmL.x, btmL.y);
+        this.ctx.lineTo(btmR.x, btmR.y);
+        this.ctx.lineTo(topR.x, topR.y);
+        this.ctx.lineTo(topL.x, topL.y);
+        this.ctx.fill();
+
+        // Draw Lane Lines
+        this.ctx.strokeStyle = 'rgba(57, 197, 187, 0.3)';
+        this.ctx.lineWidth = 2;
+        for(let i=0; i<=LANES; i++) {
+            const p1 = project(trackX + i*laneW, 0);
+            const p2 = project(trackX + i*laneW, 1);
+            this.ctx.beginPath();
+            this.ctx.moveTo(p1.x, p1.y);
+            this.ctx.lineTo(p2.x, p2.y);
+            this.ctx.stroke();
+        }
+
+        // Judge Line
+        this.ctx.strokeStyle = '#fff';
+        this.ctx.lineWidth = 4;
+        this.ctx.beginPath();
+        this.ctx.moveTo(btmL.x, btmL.y);
+        this.ctx.lineTo(btmR.x, btmR.y);
+        this.ctx.stroke();
+
+        // Lane Press Feedback (Lane color up)
+        for(let i=0; i<LANES; i++) {
+            if(this.laneState[i]) {
+                const p1 = project(trackX + i*laneW, 0);
+                const p2 = project(trackX + (i+1)*laneW, 0);
+                const p3 = project(trackX + i*laneW, 0.3); // Beam length
+                
+                const fGrad = this.ctx.createLinearGradient(0, p3.y, 0, p1.y);
+                fGrad.addColorStop(0, 'rgba(255, 0, 85, 0.0)');
+                fGrad.addColorStop(1, 'rgba(255, 0, 85, 0.6)');
+                
+                this.ctx.fillStyle = fGrad;
+                // Calculate trapezoid for beam
+                const beamTopL = project(trackX + i*laneW, 0.3);
+                const beamTopR = project(trackX + (i+1)*laneW, 0.3);
+                
+                this.ctx.beginPath();
+                this.ctx.moveTo(p1.x, p1.y);
+                this.ctx.lineTo(p2.x, p2.y);
+                this.ctx.lineTo(beamTopR.x, beamTopR.y);
+                this.ctx.lineTo(beamTopL.x, beamTopL.y);
+                this.ctx.fill();
+            }
+        }
+
+        // Draw Notes
+        // Speed logic: Constant visual speed
+        // noteSpeed = units per second. LOOKAHEAD_BASE = max visible seconds.
+        // effectiveLookahead = LOOKAHEAD_BASE / (this.noteSpeed / 10)
+        // If speed is high, lookahead time is small (notes arrive fast).
+        const speedFactor = this.noteSpeed / 5.0; // Normalizer
+        const visibleTime = LOOKAHEAD_BASE / speedFactor;
+
+        this.notes.forEach(note => {
+            // Cull missed or finished notes
+            if (note.hit && note.type !== 'long') return;
+            if (note.hit && note.type === 'long' && !note.holding && now > note.time + note.length) return;
+            
+            const dt = note.time - now;
+            
+            // Calculate Z (0 to 1) based on time
+            // dt = 0 => z = 0 (Player)
+            // dt = visibleTime => z = 1 (Horizon)
+            const z = dt / visibleTime;
+
+            let zTail = z;
+            if (note.type === 'long') {
+                const dtTail = (note.time + note.length) - now;
+                zTail = dtTail / visibleTime;
+            }
+
+            // End game check
+            if (note.type === 'end' && z < -0.5) {
+                this.finishGame();
+                return;
+            }
+            if (note.type === 'end') return;
+
+            // Visibility Cull
+            if (z > 1 && zTail > 1) return; // Too far
+            if (z < -0.1 && zTail < -0.1) {
+                if(!note.hit) { note.hit = true; this.breakCombo(); }
+                return;
+            }
+
+            // Draw
+            const drawZHead = Math.max(-0.05, Math.min(1, z));
+            const drawZTail = Math.max(-0.05, Math.min(1, zTail));
+            
+            const laneX = trackX + note.lane * laneW;
+
+            // Long Note Body
+            if (note.type === 'long') {
+                const headP = project(laneX, drawZHead);
+                const headPR = project(laneX + laneW, drawZHead);
+                const tailP = project(laneX, drawZTail);
+                const tailPR = project(laneX + laneW, drawZTail);
+
+                this.ctx.fillStyle = 'rgba(57, 197, 187, 0.7)';
+                this.ctx.beginPath();
+                this.ctx.moveTo(headP.x, headP.y);
+                this.ctx.lineTo(headPR.x, headPR.y);
+                this.ctx.lineTo(tailPR.x, tailPR.y);
+                this.ctx.lineTo(tailP.x, tailP.y);
+                this.ctx.fill();
+            }
+
+            // Note Head
+            if (!note.hit || (note.type === 'long' && note.holding)) {
+                // If holding, lock Y to judge line
+                const renderZ = note.holding ? 0 : drawZHead;
+                
+                const p = project(laneX, renderZ);
+                const pR = project(laneX + laneW, renderZ);
+                
+                const wNote = pR.x - p.x;
+                const hNote = 20 * p.scale; // Scale height by perspective
+
+                // Colors
+                if (note.type === 'flick') this.ctx.fillStyle = '#ff0055';
+                else if (note.type === 'long') this.ctx.fillStyle = '#ffeb3b';
+                else this.ctx.fillStyle = '#39c5bb';
+
+                // Shadow
+                this.ctx.shadowBlur = 10;
+                this.ctx.shadowColor = this.ctx.fillStyle;
+                
+                // Body
+                this.ctx.fillRect(p.x + 1, p.y - hNote/2, wNote - 2, hNote);
+                
+                this.ctx.shadowBlur = 0; // Reset
+
+                // Highlight
+                this.ctx.fillStyle = '#fff';
+                this.ctx.fillRect(p.x + 3, p.y - hNote/4, wNote - 6, hNote/2);
+
+                // Flick Arrow
+                if (note.type === 'flick') {
+                    this.ctx.fillStyle = '#ff0055';
+                    this.ctx.beginPath();
+                    this.ctx.moveTo(p.x + wNote/2, p.y - hNote);
+                    this.ctx.lineTo(p.x + wNote/2 - 15*p.scale, p.y - hNote/2);
+                    this.ctx.lineTo(p.x + wNote/2 + 15*p.scale, p.y - hNote/2);
+                    this.ctx.fill();
+                }
+            }
+        });
+    }
+
+    drawVisualizer() {
+        if(!this.analyser) return;
+        const bufferLength = this.analyser.frequencyBinCount;
+        const dataArray = new Uint8Array(bufferLength);
+        this.analyser.getByteFrequencyData(dataArray);
+
+        const WIDTH = this.visCanvas.width;
+        const HEIGHT = this.visCanvas.height;
+        this.visCtx.clearRect(0, 0, WIDTH, HEIGHT);
+        
+        if (this.videoEl.style.display !== 'none' && !this.videoEl.paused) return;
+
+        // Subtle Bars
+        const barWidth = (WIDTH / bufferLength) * 2.5;
+        let x = 0;
+        for(let i = 0; i < bufferLength; i++) {
+            let barHeight = dataArray[i];
+            this.visCtx.fillStyle = 'rgba(57, 197, 187, ' + (barHeight/500) + ')';
+            this.visCtx.fillRect(x, HEIGHT/2 - barHeight/2, barWidth, barHeight);
+            x += barWidth + 1;
+        }
+    }
+}
+
+// --- Init & Bindings ---
+const game = new RhythmGame();
+
+const fileInput = document.getElementById('file-input');
+const fileBtn = document.getElementById('file-select-btn');
+
+fileBtn.addEventListener('click', () => fileInput.click());
+
+fileInput.addEventListener('change', (e) => {
+    if(e.target.files.length > 0) {
+        document.getElementById('file-name').innerText = e.target.files[0].name;
+        document.getElementById('start-btn').disabled = false;
+        fileBtn.innerText = "CHANGE FILE";
+        
+        game.difficulty = parseInt(document.getElementById('diff-select').value);
+        game.noteSpeed = parseFloat(document.getElementById('speed-range').value);
+    }
+});
+
+document.getElementById('speed-range').addEventListener('input', (e) => {
+    document.getElementById('speed-val').innerText = parseFloat(e.target.value).toFixed(1);
+    game.noteSpeed = parseFloat(e.target.value);
+});
+document.getElementById('diff-select').addEventListener('change', (e) => {
+    game.difficulty = parseInt(e.target.value);
+});
+document.getElementById('start-btn').addEventListener('click', () => {
+    const file = fileInput.files[0];
+    if(file) game.loadFile(file);
+});
+
+// Animations
+const styleSheet = document.createElement("style");
+styleSheet.innerText = `
+@keyframes pop {
+    0% { transform: translate(-50%, -50%) scale(0.5); opacity: 0; }
+    50% { transform: translate(-50%, -50%) scale(1.3); opacity: 1; }
+    100% { transform: translate(-50%, -50%) scale(1.0); opacity: 0; }
+}
+@keyframes bump {
+    0% { transform: translate(-50%, -50%) scale(1); }
+    50% { transform: translate(-50%, -50%) scale(1.2); }
+    100% { transform: translate(-50%, -50%) scale(1); }
+}
+`;
+document.head.appendChild(styleSheet);
+</script>
+</body>
+</html>
