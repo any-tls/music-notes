@@ -182,12 +182,10 @@
             background: rgba(0,0,0,0.95);
             transition: opacity 0.5s;
             pointer-events: auto;
-            /* Added scroll support */
             overflow-y: auto;
             -webkit-overflow-scrolling: touch;
         }
 
-        /* Wrapper to keep content centered when not overflowing */
         .screen-content {
             display: flex;
             flex-direction: column;
@@ -195,7 +193,7 @@
             align-items: center;
             min-height: 100%;
             width: 100%;
-            padding: 40px 0; /* Padding to prevent content hitting edges */
+            padding: 40px 0;
         }
 
         .hidden {
@@ -206,7 +204,6 @@
 
         h1 { font-style: italic; text-transform: uppercase; letter-spacing: 2px; text-shadow: 0 0 10px var(--primary); margin: 0 0 20px 0; font-size: 3rem; }
 
-        /* New Logo Style */
         .title-logo {
             max-width: 100px;
             height: auto;
@@ -244,7 +241,6 @@
             backdrop-filter: blur(5px);
         }
 
-        /* Footer Style */
         .footer-container {
             margin-top: 20px;
             display: flex;
@@ -302,7 +298,6 @@
             text-align: left;
         }
         
-        /* Custom Scrollbar */
         #song-list-scroll::-webkit-scrollbar { width: 8px; }
         #song-list-scroll::-webkit-scrollbar-track { background: #111; }
         #song-list-scroll::-webkit-scrollbar-thumb { background: #444; border-radius: 4px; }
@@ -337,15 +332,13 @@
         @keyframes blink { 50% { opacity: 0.5; } }
     </style>
     <script async src="https://www.googletagmanager.com/gtag/js?id=G-RV7D701RFJ"></script>
-<script>
-  window.dataLayer = window.dataLayer || [];
-  function gtag(){dataLayer.push(arguments);}
-  gtag('js', new Date());
-
-  gtag('config', 'G-RV7D701RFJ');
-</script>
+    <script>
+      window.dataLayer = window.dataLayer || [];
+      function gtag(){dataLayer.push(arguments);}
+      gtag('js', new Date());
+      gtag('config', 'G-RV7D701RFJ');
+    </script>
 </head>
-
 <body>
 
     <div id="background-layer">
@@ -407,7 +400,7 @@
                         <a href="https://forms.gle/sM3ctNs1gpm1eiBBA" target="_blank" class="btn btn-footer">曲のリクエストやバグ報告、お問い合わせなど</a>
                     </div>
                 <div class="footer-container2">
-                       <p>音源や映像はすべてYouTubeから埋め込まれています。<br>当サイトは非公式ファンサイトです。</p>
+                        <p>音源や映像はすべてYouTubeから埋め込まれています。<br>当サイトは非公式ファンサイトです。</p>
                 </div>
             </div>
         </div>
@@ -436,7 +429,7 @@
 
 <script>
 /**
- * AI RHYTHM GAME - Searchable List Ver.
+ * AI RHYTHM GAME - Enhanced Input Ver.
  */
 
 // --- Constants ---
@@ -444,6 +437,8 @@ const LANES = 4;
 const PERFECT_WINDOW = 0.050;
 const GREAT_WINDOW = 0.100;
 const GOOD_WINDOW = 0.150;
+// ロングノーツを離してしまっても、この時間内なら押し直せば継続できる（秒）
+const LONG_NOTE_GRACE_TIME = 0.200; 
 
 // --- YouTube API Setup ---
 let player;
@@ -505,7 +500,8 @@ class RhythmGame {
         
         // Input
         this.keyMap = { 'KeyD':0, 'KeyF':1, 'KeyJ':2, 'KeyK':3 };
-        this.laneState = [false, false, false, false];
+        // レーンごとのタッチ数（0ならオフ、1以上ならオン）
+        this.laneState = [0, 0, 0, 0];
         
         // Canvas
         this.canvas = document.getElementById('game-layer');
@@ -576,7 +572,6 @@ class RhythmGame {
         const filtered = this.songList.filter(song => {
             if (terms.length === 0) return true;
             const target = song.name.toLowerCase();
-            // Check if all search terms are present in the song name
             return terms.every(term => target.includes(term));
         });
 
@@ -597,14 +592,9 @@ class RhythmGame {
             div.innerText = song.name;
             
             div.addEventListener('click', () => {
-                // Update selection
                 this.selectedSongIndex = song.originalIndex;
-                
-                // Update UI classes
                 document.querySelectorAll('.song-item').forEach(el => el.classList.remove('selected'));
                 div.classList.add('selected');
-                
-                // Enable button
                 startBtn.disabled = false;
                 startBtn.innerText = "START: " + song.name;
             });
@@ -635,7 +625,11 @@ class RhythmGame {
                 return;
             }
 
+            // ノーツデータの初期化（lastReleaseTimeなどを追加）
             this.notes = JSON.parse(JSON.stringify(chartData));
+            this.notes.forEach(n => {
+                n.lastReleaseTime = 0; // ロングノーツの中断時刻
+            });
             
             if (isYoutubeReady && player) {
                 player.cueVideoById(this.currentYoutubeId);
@@ -662,14 +656,15 @@ class RhythmGame {
     }
 
     bindInputs() {
+        // Keyboard
         window.addEventListener('keydown', (e) => {
             if (!this.isPlaying) return;
             if (e.code === 'Escape') this.stopGame();
             if (e.code in this.keyMap) {
                 const lane = this.keyMap[e.code];
-                if (!this.laneState[lane]) {
+                if (this.laneState[lane] === 0) {
                     this.handleInput(lane, 'down');
-                    this.laneState[lane] = true;
+                    this.laneState[lane] = 1; // キーボードはON/OFFなので1固定
                 }
             }
         });
@@ -678,19 +673,21 @@ class RhythmGame {
             if (e.code in this.keyMap) {
                 const lane = this.keyMap[e.code];
                 this.handleInput(lane, 'up');
-                this.laneState[lane] = false;
+                this.laneState[lane] = 0;
             }
         });
-        
+
+        // Touch (Enhanced Multi-touch)
         this.canvas.addEventListener('touchstart', (e) => {
             e.preventDefault();
             if (!this.isPlaying) return;
+            
             for (let i = 0; i < e.changedTouches.length; i++) {
                 const t = e.changedTouches[i];
                 const lane = this.getLaneFromX(t.clientX);
                 if (lane !== -1) {
                     this.handleInput(lane, 'down');
-                    this.laneState[lane] = true;
+                    this.laneState[lane]++; // タッチ数を増やす
                 }
             }
         }, { passive: false });
@@ -698,12 +695,27 @@ class RhythmGame {
         this.canvas.addEventListener('touchend', (e) => {
             e.preventDefault();
             if (!this.isPlaying) return;
+            
             for (let i = 0; i < e.changedTouches.length; i++) {
                 const t = e.changedTouches[i];
                 const lane = this.getLaneFromX(t.clientX);
                 if (lane !== -1) {
                     this.handleInput(lane, 'up');
-                    this.laneState[lane] = false;
+                    this.laneState[lane] = Math.max(0, this.laneState[lane] - 1); // タッチ数を減らす
+                }
+            }
+        });
+
+        // キャンセル系イベント（画面外に出た等）
+        this.canvas.addEventListener('touchcancel', (e) => {
+             e.preventDefault();
+             // 全リセットは危険なので、changedTouches分だけ減らす
+             for (let i = 0; i < e.changedTouches.length; i++) {
+                const t = e.changedTouches[i];
+                const lane = this.getLaneFromX(t.clientX);
+                if (lane !== -1) {
+                    this.handleInput(lane, 'up');
+                    this.laneState[lane] = Math.max(0, this.laneState[lane] - 1);
                 }
             }
         });
@@ -724,6 +736,7 @@ class RhythmGame {
         this.combo = 0;
         this.life = 1000;
         this.stats = { perfect:0, great:0, good:0, miss:0 };
+        this.laneState = [0, 0, 0, 0];
         this.updateHUD();
 
         this.isPlaying = true;
@@ -753,35 +766,70 @@ class RhythmGame {
 
     handleInput(lane, action) {
         const now = this.getCurrentTime();
-        const hittable = this.notes.filter(n => 
-            !n.hit && n.lane === lane && n.type !== 'end' &&
-            Math.abs(n.time - now) < GOOD_WINDOW + n.length
-        );
-
-        if (hittable.length === 0) return;
-        hittable.sort((a,b) => Math.abs(a.time - now) - Math.abs(b.time - now));
-        const note = hittable[0];
 
         if (action === 'down') {
-            if (note.type !== 'long') {
-                this.judge(note, now);
-            } else {
-                if (Math.abs(note.time - now) < GOOD_WINDOW) {
-                    note.holding = true;
-                    this.showJudge('PERFECT');
+            // 1. まず通常のヒット判定（未処理のノーツを探す）
+            const hittable = this.notes.filter(n => 
+                !n.hit && n.lane === lane && n.type !== 'end' &&
+                Math.abs(n.time - now) < GOOD_WINDOW + (n.type === 'long' ? 0 : 0)
+            );
+            
+            // 手前にあるものを優先
+            hittable.sort((a,b) => Math.abs(a.time - now) - Math.abs(b.time - now));
+            
+            let hitAny = false;
+
+            if (hittable.length > 0) {
+                const note = hittable[0];
+                if (note.type !== 'long') {
+                    this.judge(note, now);
+                    hitAny = true;
+                } else {
+                    // ロングノーツの始点判定
+                    if (Math.abs(note.time - now) < GOOD_WINDOW) {
+                        note.holding = true;
+                        // 始点タップ時の判定表示
+                        this.showJudge('PERFECT'); 
+                        hitAny = true;
+                    }
                 }
             }
+
+            // 2. 「ロングノーツの復帰」判定 (Grace Period)
+            // 新しいノーツを叩いたとしても、あるいは叩けなかったとしても、
+            // 「今まさにGrace期間中のロングノーツ」があれば、それを復帰させる（再ホールド状態にする）
+            // これにより「一瞬離してタップ」が可能になる。
+            const suspendedNotes = this.notes.filter(n => 
+                n.hit && n.type === 'long' && 
+                !n.holding && // 今持っていない
+                (now < n.time + n.length) && // まだ終わっていない
+                (now - n.lastReleaseTime < LONG_NOTE_GRACE_TIME) // 離してから時間が経っていない
+            );
+
+            // 同じレーンのロングノーツがあれば復帰
+            suspendedNotes.forEach(n => {
+                if (n.lane === lane) {
+                    n.holding = true;
+                    // 必要ならエフェクトなどを出すが、ログは出さない
+                }
+            });
+
         } else if (action === 'up') {
-            if (note.type === 'long' && note.holding) {
-                note.holding = false;
-                this.judge(note, now, note.time + note.length);
-            }
+            // ロングノーツを離した処理
+            // 即座にMISSにせず、holding=false にして lastReleaseTime を記録するだけにする
+            const activeLongs = this.notes.filter(n => 
+                n.hit && n.type === 'long' && n.holding && n.lane === lane
+            );
+            
+            activeLongs.forEach(n => {
+                n.holding = false;
+                n.lastReleaseTime = now;
+            });
         }
     }
 
-    judge(note, now, targetTime = null) {
-        const target = targetTime || note.time;
-        const diff = Math.abs(target - now);
+    judge(note, now) {
+        const diff = Math.abs(note.time - now);
         
         let grade = 'MISS';
         if (diff <= PERFECT_WINDOW) grade = 'PERFECT';
@@ -928,8 +976,9 @@ class RhythmGame {
         this.ctx.lineTo(btmR.x, btmR.y);
         this.ctx.stroke();
 
+        // Active Lane Effect
         for(let i=0; i<LANES; i++) {
-            if(this.laneState[i]) {
+            if(this.laneState[i] > 0) { // 1以上なら押されている
                 const p1 = project(trackX + i*laneW, 0);
                 const p2 = project(trackX + (i+1)*laneW, 0);
                 const p3 = project(trackX + i*laneW, 0.5); 
@@ -952,8 +1001,40 @@ class RhythmGame {
         }
 
         this.notes.forEach(note => {
+            // ロングノーツの「離され判定」チェック (Grace Period Expiry)
+            if (note.hit && note.type === 'long' && !note.holding) {
+                // 終了時間前なのに、離してからGrace時間を過ぎた場合 -> MISS
+                if (now < note.time + note.length) {
+                    if (now - note.lastReleaseTime > LONG_NOTE_GRACE_TIME) {
+                        // ここで初めてコンボを切る
+                        note.holding = false; // 念のため
+                        // 一度ミス扱いにすると再描画されなくなるので、
+                        // 実際には note.hit を維持しつつ、コンボを切る処理だけ呼ぶのが一般的だが、
+                        // ここでは「失敗したロングノーツ」として処理を止める。
+                        // 簡易的に note.type='missed_long' のように変えるか、もう描画しないか。
+                        // 今回は描画ループで弾かれるように終了時間を書き換えるなどのハックもできるが、
+                        // シンプルにBreakComboして、以降の判定を無効にする。
+                        // ただし、すでにhit=trueなので、描画ロジックによっては消えてしまう。
+                        // 「途中失敗」を可視化するのは難しいので、コンボを切って判定終了とする。
+                        // note.hit はすでにTrue。
+                        // 強制的に終了させる
+                        note.time = -999; 
+                        note.length = 0; 
+                        this.breakCombo();
+                        return;
+                    }
+                } else {
+                    // 終了時間を超えた場合、Grace期間内なら成功とみなす
+                     // 何もしなくてOK（下流の描画ロジックで消える）
+                }
+            }
+
             if (note.hit && note.type !== 'long') return;
-            if (note.hit && note.type === 'long' && !note.holding && now > note.time + note.length) return;
+            // ロングノーツで、終了時間を過ぎていて、かつホールド中かGrace期間内なら非表示へ
+            if (note.hit && note.type === 'long') {
+                const isFinished = now > note.time + note.length;
+                if (isFinished) return; 
+            }
             
             const dt = note.time - now;
             
@@ -968,13 +1049,14 @@ class RhythmGame {
 
             const laneX = trackX + note.lane * laneW;
 
+            // --- ロングノーツの描画 ---
             if (note.type === 'long') {
                 const dtTail = (note.time + note.length) - now;
-                if (dtTail < 0) {
-                    if (note.holding) note.holding = false;
-                    return; 
-                }
+                // 完全に通り過ぎたらリターン
+                if (dtTail < 0) return; 
 
+                // 描画上の始点時間差（ホールド中なら0=判定ライン、離していてもGrace中なら0に粘らせるか、離れた位置にするか）
+                // ここでは「離すと奥へ行ってしまう」見た目にする（押さないとズレていく）
                 const effDt = (note.holding) ? 0 : Math.max(0, dt);
                 
                 const headP = project(laneX, effDt);
@@ -983,7 +1065,13 @@ class RhythmGame {
                 const tailPR = project(laneX + laneW, dtTail);
 
                 if (headP && tailP) {
-                    this.ctx.fillStyle = 'rgba(57, 197, 187, 0.7)';
+                    // 離しているがGrace期間中の場合は色を変える（警告色）
+                    if (note.hit && !note.holding) {
+                        this.ctx.fillStyle = 'rgba(255, 100, 100, 0.7)';
+                    } else {
+                        this.ctx.fillStyle = 'rgba(57, 197, 187, 0.7)';
+                    }
+                    
                     this.ctx.beginPath();
                     this.ctx.moveTo(headP.x, headP.y);
                     this.ctx.lineTo(headPR.x, headPR.y);
@@ -993,6 +1081,7 @@ class RhythmGame {
                 }
             }
 
+            // --- ノーツ（頭）の描画 ---
             if (!note.hit || (note.type === 'long' && note.holding)) {
                 const renderDt = (note.holding) ? 0 : dt;
                 
