@@ -1,0 +1,5 @@
+title: ホロの音ゲー
+description: 非公式のホロライブ音ゲー
+theme: minima # Jekyllの標準テーマ
+baseurl: "/music-notes" # リポジトリ名
+url: "https://any-tls.github.io"
