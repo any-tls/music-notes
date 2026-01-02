@@ -1,0 +1,922 @@
+<!DOCTYPE html>
+<html lang="ja">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
+    <title>SEKAI GEN - AI Rhythm Game (3D View)</title>
+    <style>
+        /* --- CSS Variables & Reset --- */
+        :root {
+            --primary: #33d5ac; /* Miku Green */
+            --primary-dark: #209c7d;
+            --accent: #ff007c; /* Flick Pink */
+            --long: #fdbb2d;   /* Long Yellow */
+            --bg: #1a1a2e;
+            --panel: rgba(255, 255, 255, 0.95);
+            --text: #333;
+            --font-main: 'Helvetica Neue', Arial, sans-serif;
+        }
+        * { box-sizing: border-box; touch-action: none; user-select: none; -webkit-user-select: none; }
+        body { margin: 0; overflow: hidden; background: #000; font-family: var(--font-main); color: var(--text); }
+
+        /* --- UI Layers --- */
+        .screen {
+            position: absolute; top: 0; left: 0; width: 100%; height: 100%;
+            display: flex; flex-direction: column; align-items: center; justify-content: center;
+            transition: opacity 0.3s; opacity: 0; pointer-events: none; z-index: 0;
+        }
+        .screen.active { opacity: 1; pointer-events: auto; z-index: 10; }
+
+        /* --- Title Screen --- */
+        #title-screen {
+            background: radial-gradient(circle at center, #222, #000);
+            color: white;
+        }
+        h1 {
+            font-size: 3rem; margin-bottom: 10px; text-shadow: 0 0 20px var(--primary);
+            font-style: italic; letter-spacing: 2px; text-align: center;
+        }
+        #logo-placeholder {
+            width: 220px; height: 100px; border: 2px dashed rgba(255,255,255,0.3);
+            display: flex; align-items: center; justify-content: center; margin-bottom: 2rem;
+            color: rgba(255,255,255,0.5); font-size: 0.8rem; background: rgba(0,0,0,0.5);
+        }
+        .btn-start {
+            font-size: 1.5rem; padding: 15px 60px; background: linear-gradient(to right, var(--primary), #3dd);
+            border: none; border-radius: 50px; color: white; font-weight: bold; cursor: pointer;
+            box-shadow: 0 5px 25px rgba(51, 213, 172, 0.4); animation: pulse 2s infinite;
+            text-transform: uppercase; letter-spacing: 1px;
+        }
+        @keyframes pulse { 0% { transform: scale(1); } 50% { transform: scale(1.05); } 100% { transform: scale(1); } }
+
+        /* --- Selection Screen --- */
+        #select-screen { background: url('data:image/svg+xml;utf8,<svg xmlns="http://www.w3.org/2000/svg" width="40" height="40" opacity="0.1"><rect width="40" height="40" fill="none"/><path d="M0 40 L40 0" stroke="white" stroke-width="1"/></svg>') var(--bg); }
+        .panel {
+            background: var(--panel); width: 90%; max-width: 600px; padding: 25px; border-radius: 20px;
+            box-shadow: 0 20px 50px rgba(0,0,0,0.7); display: flex; flex-direction: column; gap: 15px;
+            max-height: 90vh; overflow-y: auto;
+        }
+        .section-title { color: var(--primary-dark); font-weight: 800; border-bottom: 2px solid #eee; margin-bottom: 10px; font-size: 1.1rem; }
+        
+        .file-drop {
+            border: 3px dashed #ccc; padding: 30px; text-align: center; border-radius: 15px;
+            cursor: pointer; transition: 0.2s; color: #666; background: #fafafa;
+        }
+        .file-drop:hover { border-color: var(--primary); background: #f0fffa; color: var(--primary-dark); }
+        
+        .yt-search { display: flex; gap: 5px; }
+        .yt-search input { flex: 1; padding: 12px; border: 1px solid #ddd; border-radius: 8px; font-size: 1rem; }
+        .yt-search button { background: #f00; color: white; border: none; padding: 0 25px; border-radius: 8px; cursor: pointer; font-weight: bold; }
+
+        .settings-grid { display: grid; grid-template-columns: 1fr; gap: 10px; }
+        .setting-item label { display: block; font-size: 0.9rem; color: #555; margin-bottom: 5px; font-weight: bold; }
+        input[type="range"] { width: 100%; accent-color: var(--primary); }
+
+        .diff-btn-group { display: flex; gap: 5px; }
+        .diff-btn {
+            flex: 1; padding: 12px 0; border: none; color: white; font-weight: 800; font-size: 0.8rem;
+            cursor: pointer; opacity: 0.3; transition: all 0.2s; border-radius: 8px; text-align: center;
+            transform: skewX(-10deg);
+        }
+        .diff-btn span { display: block; transform: skewX(10deg); } /* Unskew text */
+        .diff-btn.selected { opacity: 1; transform: skewX(-10deg) scale(1.1); box-shadow: 0 5px 15px rgba(0,0,0,0.3); z-index: 2; }
+        
+        .diff-easy { background: #44bd32; }
+        .diff-normal { background: #0097e6; }
+        .diff-hard { background: #e1b12c; }
+        .diff-expert { background: #c23616; }
+        .diff-master { background: #8c7ae6; }
+
+        /* --- Game Screen --- */
+        #game-screen { background: #000; overflow: hidden; }
+        #game-canvas { position: absolute; top: 0; left: 0; width: 100%; height: 100%; display: block; }
+        
+        /* Game UI Overlay */
+        .game-ui {
+            position: absolute; width: 100%; height: 100%; pointer-events: none;
+            display: flex; flex-direction: column; justify-content: space-between; padding: 20px;
+            z-index: 5;
+        }
+        .top-bar { display: flex; justify-content: space-between; align-items: flex-start; color: white; }
+        .life-bar-container { 
+            width: 250px; height: 12px; background: rgba(255,255,255,0.2); 
+            border-radius: 6px; overflow: hidden; margin-top: 5px; border: 1px solid rgba(255,255,255,0.3);
+        }
+        .life-bar { height: 100%; background: #6f6; width: 100%; transition: width 0.1s linear, background 0.3s; box-shadow: 0 0 10px #6f6; }
+        .score-display { font-size: 2rem; font-family: 'Courier New', monospace; font-weight: 900; letter-spacing: 2px; }
+        
+        .combo-display {
+            position: absolute; top: 35%; left: 50%; transform: translate(-50%, -50%);
+            text-align: center; color: white; opacity: 0; transition: opacity 0.1s;
+        }
+        .combo-display.show { opacity: 1; }
+        .combo-num { 
+            font-size: 5rem; font-weight: 900; color: #fff; font-style: italic;
+            text-shadow: 0 0 0 #fff, 2px 2px 0 #33d5ac; /* Retro 3D text effect */
+            background: linear-gradient(to bottom, #fff, #33d5ac); -webkit-background-clip: text; -webkit-text-fill-color: transparent;
+        }
+        .combo-text { font-size: 1.2rem; letter-spacing: 5px; font-weight: bold; text-transform: uppercase; display: block; margin-top: -10px; }
+        
+        .judge-display {
+            position: absolute; top: 55%; left: 50%; transform: translate(-50%, -50%);
+            font-size: 2.5rem; font-weight: 900; font-style: italic;
+            text-shadow: 0 0 15px rgba(255,255,255,0.8); opacity: 0; pointer-events: none;
+        }
+        
+        .btn-back { pointer-events: auto; padding: 8px 20px; background: rgba(0,0,0,0.6); border: 1px solid rgba(255,255,255,0.5); color: white; border-radius: 20px; cursor: pointer; }
+        .btn-back:hover { background: rgba(255,255,255,0.2); }
+
+        /* --- Result Screen --- */
+        #result-screen { background: radial-gradient(circle at center, #333, #000); color: white; }
+        .result-card {
+            background: rgba(255,255,255,0.1); backdrop-filter: blur(20px); -webkit-backdrop-filter: blur(20px);
+            padding: 50px; border-radius: 30px; text-align: center; border: 1px solid rgba(255,255,255,0.2);
+            box-shadow: 0 0 50px rgba(51, 213, 172, 0.2); animation: popIn 0.5s cubic-bezier(0.175, 0.885, 0.32, 1.275);
+        }
+        @keyframes popIn { from { transform: scale(0.8); opacity: 0; } to { transform: scale(1); opacity: 1; } }
+        .rank-letter { 
+            font-size: 8rem; line-height: 1; font-weight: 900; 
+            background: linear-gradient(to bottom right, #ffeb3b, #f57f17); 
+            -webkit-background-clip: text; -webkit-text-fill-color: transparent; 
+            filter: drop-shadow(0 0 20px rgba(255, 235, 59, 0.5));
+            margin: 10px 0;
+        }
+
+        /* --- Loading --- */
+        #loading-overlay {
+            position: fixed; top: 0; left: 0; width: 100%; height: 100%; background: rgba(0,0,0,0.9);
+            z-index: 100; display: none; flex-direction: column; align-items: center; justify-content: center; color: white;
+        }
+        .spinner {
+            width: 50px; height: 50px; border: 5px solid rgba(255,255,255,0.1);
+            border-top: 5px solid var(--primary); border-radius: 50%; animation: spin 0.8s linear infinite; margin-bottom: 20px;
+        }
+        @keyframes spin { 0% { transform: rotate(0deg); } 100% { transform: rotate(360deg); } }
+
+        /* Mobile tweaks */
+        @media screen and (max-width: 600px) {
+            .diff-btn span { font-size: 0.7rem; }
+            .combo-num { font-size: 4rem; }
+        }
+    </style>
+</head>
+<body>
+
+    <div id="loading-overlay">
+        <div class="spinner"></div>
+        <div id="loading-text">Analyzing Music...</div>
+    </div>
+
+    <div id="title-screen" class="screen active">
+        <div id="logo-placeholder">GAME LOGO</div>
+        <h1>SEKAI GEN</h1>
+        <p style="opacity: 0.7; margin-bottom: 30px; font-family: monospace;">AI GENERATED RHYTHM ACTION</p>
+        <button class="btn-start" onclick="navTo('select-screen')">Start Game</button>
+    </div>
+
+    <div id="select-screen" class="screen">
+        <div class="panel">
+            <h2 style="margin:0; text-align: center; color:var(--primary); text-transform:uppercase;">Music Select</h2>
+            
+            <div>
+                <div class="section-title">ローカルファイル (推奨)</div>
+                <div class="file-drop" onclick="document.getElementById('file-input').click()">
+                    <strong>タップして音楽/動画を選択</strong><br>
+                    <small style="color:#888; display:block; margin-top:5px;">(mp3, wav, mp4, webm 対応)</small>
+                </div>
+                <input type="file" id="file-input" accept="audio/*,video/*" style="display: none;" onchange="handleFileSelect(this)">
+            </div>
+
+            <div>
+                <div class="section-title">YouTube検索 (デモ)</div>
+                <div class="yt-search">
+                    <input type="text" id="yt-query" placeholder="キーワードを入力...">
+                    <button onclick="mockYouTubeSearch()">検索</button>
+                </div>
+                <small style="color:#e74c3c; font-size:0.75rem; margin-top:5px; display:block;">
+                    ※ブラウザのセキュリティ制約により、実際のYouTube動画解析は行えません。デモ用楽曲が生成されます。
+                </small>
+            </div>
+
+            <div>
+                <div class="section-title">難易度設定</div>
+                <div class="diff-btn-group">
+                    <button class="diff-btn diff-easy" onclick="setDiff(0)"><span>EASY</span></button>
+                    <button class="diff-btn diff-normal" onclick="setDiff(1)"><span>NORMAL</span></button>
+                    <button class="diff-btn diff-hard selected" onclick="setDiff(2)"><span>HARD</span></button>
+                    <button class="diff-btn diff-expert" onclick="setDiff(3)"><span>EXPERT</span></button>
+                    <button class="diff-btn diff-master" onclick="setDiff(4)"><span>MASTER</span></button>
+                </div>
+                
+                <div class="settings-grid" style="margin-top:15px;">
+                    <div class="setting-item">
+                        <label>ノーツスピード: <span id="speed-val" style="color:var(--primary); font-weight:bold;">8.0</span></label>
+                        <input type="range" min="1" max="12" step="0.1" value="8" oninput="updateSpeed(this.value)">
+                    </div>
+                </div>
+            </div>
+
+            <button class="btn-start" style="width:100%; margin-top:15px; padding:15px; border-radius:15px; font-size:1.2rem;" onclick="startGame()" id="btn-play" disabled>FILE NOT SELECTED</button>
+        </div>
+    </div>
+
+    <div id="game-screen" class="screen">
+        <canvas id="game-canvas"></canvas>
+        <div class="game-ui">
+            <div class="top-bar">
+                <div>
+                    <div class="score-display" id="score">0000000</div>
+                    <div class="life-bar-container"><div class="life-bar" id="life-bar"></div></div>
+                </div>
+                <button class="btn-back" onclick="quitGame()">PAUSE / QUIT</button>
+            </div>
+            
+            <div class="combo-display" id="combo-container">
+                <span class="combo-num" id="combo-num">0</span>
+                <span class="combo-text">COMBO</span>
+            </div>
+            
+            <div class="judge-display" id="judge-text">PERFECT</div>
+        </div>
+    </div>
+
+    <div id="result-screen" class="screen">
+        <div class="result-card">
+            <h2 style="font-style:italic; margin-bottom:0;">FULL COMBO?</h2>
+            <div class="rank-letter" id="result-rank">S</div>
+            <div style="font-size:1.5rem; margin:10px 0;">Score: <span id="result-score" style="font-weight:bold;">0</span></div>
+            <div style="font-size:1.2rem; color:#aaa;">Max Combo: <span id="result-combo">0</span></div>
+            <button class="btn-start" style="margin-top:30px; font-size:1rem;" onclick="navTo('select-screen')">BACK TO SELECT</button>
+        </div>
+    </div>
+
+<script>
+/**
+ * SEKAI GEN - Core Logic (3D Perspective Edition)
+ * Updated to use true perspective projection logic for note rendering.
+ */
+
+// --- Global State ---
+const state = {
+    screen: 'title',
+    audioCtx: null,
+    audioBuffer: null,
+    sourceNode: null,
+    isPlaying: false,
+    startTime: 0,
+    difficulty: 2, 
+    noteSpeed: 8.0, // Default slightly faster for 3D feel
+    chart: [], 
+    score: 0,
+    combo: 0,
+    maxCombo: 0,
+    life: 1000,
+    activeNotes: [],
+    laneCount: 4, 
+    keyMapping: ['d', 'f', 'j', 'k'], 
+    touchLanes: [false, false, false, false],
+    isMobile: false
+};
+
+const DIFFICULTY_SETTINGS = [
+    { name: 'EASY', density: 0.8, thresholdMod: 0.05 },
+    { name: 'NORMAL', density: 1.5, thresholdMod: 0.0 },
+    { name: 'HARD', density: 2.5, thresholdMod: -0.05 },
+    { name: 'EXPERT', density: 4.0, thresholdMod: -0.1 },
+    { name: 'MASTER', density: 6.0, thresholdMod: -0.15 }
+];
+
+// Constants
+const HIT_WINDOW = { PERFECT: 0.050, GREAT: 0.100, GOOD: 0.150, BAD: 0.200 };
+const CANVAS = document.getElementById('game-canvas');
+const CTX = CANVAS.getContext('2d', { alpha: false }); // Optimize
+const LOOKAHEAD_BASE = 4.0; // Base visible seconds
+
+// --- 3D Projection Constants ---
+const PERSPECTIVE = {
+    fov: 1.5,      // Field of view factor
+    cameraY: 3.0,  // Camera height relative to track
+    cameraZ: -1.0, // Camera distance behind judgement line
+    trackLen: 20.0 // How deep into the screen the track goes
+};
+
+// --- Navigation & Setup ---
+function navTo(screenId) {
+    document.querySelectorAll('.screen').forEach(s => s.classList.remove('active'));
+    document.getElementById(screenId).classList.add('active');
+    state.screen = screenId;
+    if(screenId === 'title') stopAudio();
+}
+
+function updateSpeed(val) {
+    state.noteSpeed = parseFloat(val);
+    document.getElementById('speed-val').textContent = state.noteSpeed.toFixed(1);
+}
+
+function setDiff(idx) {
+    state.difficulty = idx;
+    document.querySelectorAll('.diff-btn').forEach((b, i) => {
+        b.classList.toggle('selected', i === idx);
+    });
+}
+
+function stopAudio() {
+    if(state.sourceNode) {
+        try { state.sourceNode.stop(); } catch(e){}
+        state.sourceNode = null;
+    }
+    state.isPlaying = false;
+}
+
+// --- Audio & AI Chart Generation ---
+function initAudio() {
+    if (!state.audioCtx) {
+        state.audioCtx = new (window.AudioContext || window.webkitAudioContext)();
+    }
+}
+
+async function handleFileSelect(input) {
+    const file = input.files[0];
+    if (!file) return;
+
+    document.getElementById('btn-play').innerText = "Analyzing...";
+    document.getElementById('loading-overlay').style.display = 'flex';
+    initAudio();
+
+    const reader = new FileReader();
+    reader.onload = async (e) => {
+        try {
+            const arrayBuffer = e.target.result;
+            state.audioBuffer = await state.audioCtx.decodeAudioData(arrayBuffer);
+            generateChart(state.audioBuffer, file.name);
+            
+            document.getElementById('loading-overlay').style.display = 'none';
+            document.getElementById('btn-play').innerText = "PLAY START";
+            document.getElementById('btn-play').disabled = false;
+        } catch (err) {
+            alert("読み込みエラー: 音声ファイルを解析できませんでした。");
+            document.getElementById('loading-overlay').style.display = 'none';
+            document.getElementById('btn-play').innerText = "ERROR";
+        }
+    };
+    reader.readAsArrayBuffer(file);
+}
+
+function mockYouTubeSearch() {
+    const q = document.getElementById('yt-query').value;
+    if(!q) return alert("キーワードを入力してください");
+    alert(`「${q}」のデモプレイを開始します。`);
+    
+    initAudio();
+    const sr = state.audioCtx.sampleRate;
+    const len = 90 * sr; 
+    const buffer = state.audioCtx.createBuffer(2, len, sr);
+    
+    // Create a rhythmic beat for demo
+    for (let c = 0; c < 2; c++) {
+        const data = buffer.getChannelData(c);
+        for (let i = 0; i < len; i++) {
+            // Kick drum every 0.5s
+            if (i % (sr/2) < 200) data[i] = 0.8; 
+            // Hi-hat every 0.25s
+            else if (i % (sr/4) < 100) data[i] = 0.3;
+            else data[i] = 0;
+        }
+    }
+    state.audioBuffer = buffer;
+    generateChart(buffer, "DemoSong" + Math.random());
+    document.getElementById('btn-play').disabled = false;
+    document.getElementById('btn-play').innerText = "PLAY DEMO";
+}
+
+// AI Analysis: Deterministic Rhythm Detection
+function generateChart(buffer, seedString) {
+    const rawData = buffer.getChannelData(0);
+    const sampleRate = buffer.sampleRate;
+    const notes = [];
+    
+    const diffSet = DIFFICULTY_SETTINGS[state.difficulty];
+    const threshold = 0.1 + diffSet.thresholdMod;
+    const minGap = 1.0 / diffSet.density; // Minimum time between notes
+    
+    // Simple PRNG
+    let seedVal = 0;
+    for(let i=0; i<seedString.length; i++) seedVal += seedString.charCodeAt(i);
+    const random = () => {
+        seedVal = (seedVal * 9301 + 49297) % 233280;
+        return seedVal / 233280;
+    };
+
+    let lastNoteTime = 0;
+    const windowSize = Math.floor(sampleRate / 30); // ~33ms window
+
+    for (let i = 0; i < rawData.length - windowSize; i += windowSize) {
+        // Calculate RMS (Energy) of window
+        let sum = 0;
+        for(let j=0; j<windowSize; j++) sum += rawData[i+j] * rawData[i+j];
+        let rms = Math.sqrt(sum / windowSize);
+
+        const t = i / sampleRate;
+
+        if (rms > threshold && (t - lastNoteTime > minGap)) {
+            const lane = Math.floor(random() * state.laneCount);
+            
+            // Note type logic
+            let type = 'tap';
+            const r = random();
+            if (r > 0.85) type = 'flick';
+            else if (r < 0.15) type = 'long';
+
+            let duration = 0;
+            if (type === 'long') {
+                duration = 0.2 + (random() * 0.8);
+                // Prevent long notes overlapping next hits too much
+                lastNoteTime = t + duration + (minGap/2);
+            } else {
+                lastNoteTime = t;
+            }
+
+            notes.push({
+                time: t,
+                lane: lane,
+                type: type,
+                duration: duration,
+                hit: false,
+                processed: false,
+                holding: false
+            });
+        }
+    }
+    
+    state.chart = notes;
+    console.log(`Generated ${notes.length} notes.`);
+}
+
+// --- Game Loop ---
+
+function startGame() {
+    navTo('game-screen');
+    state.score = 0;
+    state.combo = 0;
+    state.maxCombo = 0;
+    state.life = 1000;
+    state.activeNotes = JSON.parse(JSON.stringify(state.chart));
+    
+    updateLifeUI();
+    updateScoreUI();
+    document.getElementById('combo-container').classList.remove('show');
+
+    resizeCanvas();
+    window.addEventListener('resize', resizeCanvas);
+
+    // Start Audio with delay
+    state.startTime = state.audioCtx.currentTime + 2.0;
+    state.sourceNode = state.audioCtx.createBufferSource();
+    state.sourceNode.buffer = state.audioBuffer;
+    state.sourceNode.connect(state.audioCtx.destination);
+    state.sourceNode.start(state.startTime);
+    state.sourceNode.onended = () => {
+        setTimeout(showResult, 2000);
+    };
+
+    state.isPlaying = true;
+    requestAnimationFrame(gameLoop);
+}
+
+function quitGame() {
+    stopAudio();
+    navTo('select-screen');
+}
+
+function showResult() {
+    state.isPlaying = false;
+    navTo('result-screen');
+    document.getElementById('result-score').innerText = Math.floor(state.score);
+    document.getElementById('result-combo').innerText = state.maxCombo;
+    
+    let rank = 'C';
+    if(state.score > 100000) rank = 'B';
+    if(state.score > 300000) rank = 'A';
+    if(state.score > 600000) rank = 'S';
+    if(state.score > 800000) rank = 'SS';
+    document.getElementById('result-rank').innerText = rank;
+}
+
+function resizeCanvas() {
+    CANVAS.width = window.innerWidth;
+    CANVAS.height = window.innerHeight;
+    state.isMobile = window.innerWidth < 800;
+}
+
+// --- 3D Projection Math ---
+// Projects world coordinate (lane, z-depth) to Screen (x, y, scale)
+// Z=0 is Hit Line. Z increases as it goes into the distance.
+function project(laneIndex, zDepth) {
+    const w = CANVAS.width;
+    const h = CANVAS.height;
+    
+    // Lane configuration in "World" units
+    // Center is 0. Lanes are -1.5, -0.5, 0.5, 1.5
+    const worldLaneWidth = 1.0; 
+    const worldX = (laneIndex - (state.laneCount - 1) / 2) * worldLaneWidth;
+    
+    // Perspective Projection Formula: scale = 1 / z
+    // We add an offset to Z so z=0 doesn't cause division by zero
+    // z=0 is at the player. 
+    const projectionFactor = 1 / (1 + (zDepth * 0.5)); // 0.5 controls "FOV"
+    
+    // Screen Center
+    const cx = w / 2;
+    // Vanishing Point Y (Horizon)
+    const vpY = h * 0.25; 
+    // Hit Line Y (Bottom)
+    const hitY = h * 0.85;
+    
+    // Calculate vertical position based on projection
+    // At z=0, we want y = hitY. At z=inf, y = vpY.
+    // Linear interpolation between VP and HitLine based on projection factor
+    // When factor=1 (z=0), y = hitY. When factor=0 (z=inf), y = vpY.
+    const screenY = vpY + (hitY - vpY) * projectionFactor;
+    
+    // Calculate horizontal position
+    // Base width of the track at the hit line
+    const trackBaseWidth = state.isMobile ? w * 0.95 : w * 0.5;
+    // Current scale of the lane at this depth
+    const currentScale = projectionFactor;
+    
+    const screenX = cx + (worldX * (trackBaseWidth / state.laneCount) * currentScale);
+    const width = (trackBaseWidth / state.laneCount) * currentScale;
+    
+    return { x: screenX, y: screenY, w: width, s: currentScale };
+}
+
+// --- Render Loop ---
+function gameLoop() {
+    if (!state.isPlaying) return;
+
+    // Clear
+    // Create a dark gradient background
+    const grad = CTX.createLinearGradient(0, 0, 0, CANVAS.height);
+    grad.addColorStop(0, '#101020');
+    grad.addColorStop(1, '#000000');
+    CTX.fillStyle = grad;
+    CTX.fillRect(0, 0, CANVAS.width, CANVAS.height);
+
+    const now = state.audioCtx.currentTime;
+    const trackTime = now - state.startTime;
+
+    // Draw Track Lines (3D)
+    drawTrack();
+
+    // Judgement Line (Visual)
+    drawJudgeLine();
+
+    // Draw Notes
+    // Calculate Z based on Time Difference and Speed
+    // Speed determines how much Z-distance corresponds to 1 second
+    const zSpeed = state.noteSpeed; 
+    
+    state.activeNotes.forEach(note => {
+        if(note.processed) return;
+
+        const timeDiff = note.time - trackTime;
+        
+        // Handle Input Timing Logic (Miss)
+        if (timeDiff < -HIT_WINDOW.BAD && !note.hit) {
+             // For long notes, only miss if head is gone and not holding
+             if(note.type !== 'long' || (note.type === 'long' && timeDiff < -(note.duration + HIT_WINDOW.BAD))) {
+                triggerJudge('MISS');
+                note.processed = true;
+                state.combo = 0;
+                state.life = Math.max(0, state.life - 50);
+                updateLifeUI();
+                return;
+             }
+        }
+
+        // Only draw if within visible range (Z > -something and Z < max)
+        // Z = timeDiff * speed. 
+        // If timeDiff is 0, Z is 0 (at line).
+        
+        // Lookahead limit
+        if (timeDiff > 4.0 / (state.noteSpeed/5)) return; 
+        if (timeDiff < -0.5 && note.type !== 'long') return;
+
+        const z = timeDiff * zSpeed;
+        
+        // Draw Long Note Tail first (so head is on top)
+        if (note.type === 'long') {
+            const endZ = (timeDiff + note.duration) * zSpeed;
+            drawLongNoteTrace(note.lane, z, endZ, note.type);
+        }
+
+        // Draw Note Head
+        if (z > -1) { // Don't draw if behind camera too much
+            const p = project(note.lane, z);
+            // Don't draw if too small (far away)
+            if(p.s > 0.05) {
+                drawNoteHead(p, note.type);
+            }
+        }
+    });
+
+    requestAnimationFrame(gameLoop);
+}
+
+function drawTrack() {
+    CTX.strokeStyle = 'rgba(255, 255, 255, 0.15)';
+    CTX.lineWidth = 2;
+    CTX.beginPath();
+
+    // Draw 5 vertical lines (lane dividers)
+    for(let i=0; i<=state.laneCount; i++) {
+        // Project far point (z=20) and near point (z=0)
+        // Adjust lane index to cover edges
+        const laneIdx = i - 0.5; // offset slightly for drawing dividers
+        
+        // We use the project function to get screen coords for the lines
+        // But we need to map the dividers boundaries.
+        // project() takes center of lane.
+        // So lane 0 center is -1.5. Left edge is -2.0.
+        // Lane i edge is -2.0 + i
+        const worldEdge = -2.0 + i;
+        
+        // Manual projection for edges reusing logic
+        const pNear = projectWorldX(worldEdge, 0);
+        const pFar = projectWorldX(worldEdge, 20); // 20 is far horizon
+        
+        CTX.moveTo(pNear.x, pNear.y);
+        CTX.lineTo(pFar.x, pFar.y);
+    }
+    CTX.stroke();
+
+    // Draw Horizon Line
+    const pCenterFar = projectWorldX(0, 20);
+    CTX.strokeStyle = 'rgba(51, 213, 172, 0.3)';
+    CTX.beginPath();
+    CTX.moveTo(0, pCenterFar.y);
+    CTX.lineTo(CANVAS.width, pCenterFar.y);
+    CTX.stroke();
+}
+
+// Helper for drawing lines without full object creation
+function projectWorldX(laneVal, z) {
+    // laneVal: -2 (left edge) to +2 (right edge)
+    // Re-implement projection logic for raw X
+    const w = CANVAS.width;
+    const h = CANVAS.height;
+    const projectionFactor = 1 / (1 + (z * 0.5));
+    const cx = w / 2;
+    const vpY = h * 0.25;
+    const hitY = h * 0.85;
+    const screenY = vpY + (hitY - vpY) * projectionFactor;
+    const trackBaseWidth = state.isMobile ? w * 0.95 : w * 0.5;
+    // Map laneVal (-2 to 2) to width. Total width is 4 units.
+    // laneVal 0 is center.
+    const screenX = cx + (laneVal * (trackBaseWidth / 4) * projectionFactor);
+    return { x: screenX, y: screenY };
+}
+
+function drawJudgeLine() {
+    const pLeft = projectWorldX(-2.0, 0);
+    const pRight = projectWorldX(2.0, 0);
+    
+    CTX.shadowBlur = 15;
+    CTX.shadowColor = 'var(--primary)';
+    CTX.strokeStyle = 'white';
+    CTX.lineWidth = 4;
+    CTX.beginPath();
+    CTX.moveTo(pLeft.x, pLeft.y);
+    CTX.lineTo(pRight.x, pRight.y);
+    CTX.stroke();
+    CTX.shadowBlur = 0;
+
+    // Draw input feedback (lane highlights)
+    state.touchLanes.forEach((active, i) => {
+        if(active) {
+            const pL = projectWorldX(-2.0 + i, 0);
+            const pR = projectWorldX(-2.0 + i + 1, 0);
+            const pLF = projectWorldX(-2.0 + i, 5); // fading up
+            const pRF = projectWorldX(-2.0 + i + 1, 5);
+            
+            const grad = CTX.createLinearGradient(0, pLF.y, 0, pL.y);
+            grad.addColorStop(0, 'rgba(255, 255, 255, 0)');
+            grad.addColorStop(1, 'rgba(51, 213, 172, 0.3)');
+            
+            CTX.fillStyle = grad;
+            CTX.beginPath();
+            CTX.moveTo(pL.x, pL.y);
+            CTX.lineTo(pR.x, pR.y);
+            CTX.lineTo(pRF.x, pRF.y);
+            CTX.lineTo(pLF.x, pLF.y);
+            CTX.fill();
+        }
+    });
+}
+
+function drawNoteHead(p, type) {
+    const h = 25 * p.s; // Scale height
+    const y = p.y - h/2;
+    const x = p.x - p.w/2;
+    const w = p.w;
+
+    CTX.shadowBlur = 10 * p.s;
+    
+    let color = '#33d5ac';
+    if(type === 'flick') color = '#ff007c';
+    if(type === 'long') color = '#fdbb2d';
+
+    CTX.fillStyle = color;
+    CTX.shadowColor = color;
+    
+    // Draw simplified Note Rect
+    CTX.beginPath();
+    // A slight trapezoid shape to enhance 3D effect? 
+    // Just rect for now, perspective is handled by position/scale
+    CTX.roundRect(x + 2, y, w - 4, h, 4);
+    CTX.fill();
+
+    // Inner highlight
+    CTX.fillStyle = 'rgba(255,255,255,0.8)';
+    CTX.shadowBlur = 0;
+    CTX.fillRect(x + w*0.2, y + h*0.2, w*0.6, h*0.2);
+
+    // Flick Arrow
+    if(type === 'flick') {
+        CTX.strokeStyle = 'white';
+        CTX.lineWidth = 3 * p.s;
+        CTX.beginPath();
+        CTX.moveTo(x + w*0.2, y + h*1.5); // Arrow pointing up/out
+        CTX.lineTo(x + w*0.5, y - h*0.5);
+        CTX.lineTo(x + w*0.8, y + h*1.5);
+        CTX.stroke();
+    }
+}
+
+function drawLongNoteTrace(lane, startZ, endZ, type) {
+    // Clamp startZ to 0 (don't draw past judge line visually for the body)
+    // Actually we want it to go past if holding, but let's clamp for cleanliness
+    const z1 = Math.max(0, startZ); 
+    const z2 = endZ;
+    
+    if (z1 >= z2) return; // Completely passed
+
+    // Steps to draw smooth curved/perspective polygon
+    // We calculate 4 corners: 2 at Near Z, 2 at Far Z
+    const pNear = project(lane, z1);
+    const pFar = project(lane, z2);
+    
+    // Calculate corners
+    const nX1 = pNear.x - pNear.w/2 + 2;
+    const nX2 = pNear.x + pNear.w/2 - 2;
+    const fX1 = pFar.x - pFar.w/2 + 2;
+    const fX2 = pFar.x + pFar.w/2 - 2;
+
+    CTX.fillStyle = 'rgba(253, 187, 45, 0.4)'; // Semi transparent yellow
+    CTX.beginPath();
+    CTX.moveTo(nX1, pNear.y); // Bottom Left
+    CTX.lineTo(nX2, pNear.y); // Bottom Right
+    CTX.lineTo(fX2, pFar.y);  // Top Right
+    CTX.lineTo(fX1, pFar.y);  // Top Left
+    CTX.fill();
+    
+    // Center line
+    CTX.strokeStyle = 'rgba(255,255,255,0.5)';
+    CTX.lineWidth = 2 * pFar.s;
+    CTX.beginPath();
+    CTX.moveTo(pNear.x, pNear.y);
+    CTX.lineTo(pFar.x, pFar.y);
+    CTX.stroke();
+}
+
+
+// --- Input Handling ---
+
+function handleInput(lane, actionType = 'tap') {
+    if (!state.isPlaying) return;
+    
+    state.touchLanes[lane] = true;
+    
+    const now = state.audioCtx.currentTime;
+    const trackTime = now - state.startTime;
+    
+    // Find note
+    // For tap/flick: find closest note in window
+    // For long: handle hold logic (omitted for brevity, treating head as tap)
+    const hitNote = state.activeNotes.find(n => 
+        n.lane === lane && 
+        !n.processed && 
+        Math.abs(n.time - trackTime) < HIT_WINDOW.BAD
+    );
+
+    if (hitNote) {
+        // Flick Check (if note is flick, require movement? Simplified to tap for web)
+        const diff = Math.abs(hitNote.time - trackTime);
+        let judge = 'MISS';
+        let scoreAdd = 0;
+
+        if (diff < HIT_WINDOW.PERFECT) { judge = 'PERFECT'; scoreAdd = 500; }
+        else if (diff < HIT_WINDOW.GREAT) { judge = 'GREAT'; scoreAdd = 300; }
+        else if (diff < HIT_WINDOW.GOOD) { judge = 'GOOD'; scoreAdd = 100; }
+        else { judge = 'BAD'; scoreAdd = 0; }
+
+        triggerJudge(judge);
+        
+        if (judge !== 'BAD' && judge !== 'MISS') {
+            state.score += scoreAdd * (1 + (state.combo / 100));
+            state.combo++;
+            if(state.combo > state.maxCombo) state.maxCombo = state.combo;
+            spawnHitEffect(lane);
+        } else {
+            state.combo = 0;
+            state.life -= 20;
+        }
+        
+        hitNote.processed = true;
+        hitNote.hit = true;
+        updateScoreUI();
+        updateLifeUI();
+    }
+}
+
+function releaseInput(lane) {
+    state.touchLanes[lane] = false;
+    // Long note release logic would go here
+}
+
+// Keyboard
+window.addEventListener('keydown', (e) => {
+    if (e.repeat) return;
+    if (state.screen !== 'game-screen') return;
+    const k = state.keyMapping.indexOf(e.key.toLowerCase());
+    if (k !== -1) handleInput(k);
+});
+window.addEventListener('keyup', (e) => {
+    const k = state.keyMapping.indexOf(e.key.toLowerCase());
+    if (k !== -1) releaseInput(k);
+});
+
+// Touch (Multi-touch support)
+CANVAS.addEventListener('touchstart', (e) => {
+    e.preventDefault();
+    if (state.screen !== 'game-screen') return;
+    for (let i = 0; i < e.changedTouches.length; i++) {
+        const t = e.changedTouches[i];
+        const lane = Math.floor(t.clientX / (window.innerWidth / state.laneCount));
+        if(lane >= 0 && lane < 4) handleInput(lane);
+    }
+}, {passive: false});
+
+CANVAS.addEventListener('touchend', (e) => {
+    e.preventDefault();
+    for (let i = 0; i < e.changedTouches.length; i++) {
+        const t = e.changedTouches[i];
+        const lane = Math.floor(t.clientX / (window.innerWidth / state.laneCount));
+        if(lane >= 0 && lane < 4) releaseInput(lane);
+    }
+});
+
+// --- Feedback ---
+function triggerJudge(text) {
+    const el = document.getElementById('judge-text');
+    el.innerText = text;
+    el.style.color = (text === 'PERFECT') ? '#ffeb3b' : (text === 'GREAT') ? '#f06' : (text === 'MISS') ? '#888' : '#fff';
+    el.style.opacity = 1;
+    el.style.transform = 'translate(-50%, -50%) scale(1.3)'; // Pop effect
+    
+    // Reset animation
+    // Use Web Animations API or simple CSS reset
+    requestAnimationFrame(() => {
+        el.style.transition = 'transform 0.1s ease-out, opacity 0.3s ease-out';
+        el.style.transform = 'translate(-50%, -50%) scale(1)';
+        setTimeout(() => { el.style.opacity = 0; }, 200);
+    });
+
+    const comboEl = document.getElementById('combo-container');
+    const comboNum = document.getElementById('combo-num');
+    if(state.combo > 1) {
+        comboEl.classList.add('show');
+        comboNum.innerText = state.combo;
+    } else {
+        comboEl.classList.remove('show');
+    }
+}
+
+function updateScoreUI() {
+    document.getElementById('score').innerText = Math.floor(state.score).toString().padStart(7, '0');
+}
+function updateLifeUI() {
+    const pct = Math.max(0, (state.life / 1000) * 100);
+    const bar = document.getElementById('life-bar');
+    bar.style.width = `${pct}%`;
+    bar.style.background = state.life < 300 ? '#ff4757' : '#2ed573';
+}
+
+function spawnHitEffect(lane) {
+    // Draw a quick flash at the hit position in next frame or simple overlay
+    // Implemented via CSS/Canvas mix for simplicity (see drawJudgeLine highlighting)
+}
+
+</script>
+</body>
+</html>
