@@ -136,7 +136,7 @@
         }
 
         #combo-count {
-            font-size: 4.5rem;
+            font-size: 3.0rem;
             font-weight: 900;
             background: linear-gradient(to bottom, #fff, var(--primary));
             -webkit-background-clip: text;
@@ -146,7 +146,7 @@
         }
 
         #combo-label {
-            font-size: 1.2rem;
+            font-size: 0.9rem;
             letter-spacing: 5px;
             color: var(--primary);
             font-weight: bold;
@@ -156,7 +156,7 @@
         #judge-display {
             top: 60%; left: 50%;
             transform: translate(-50%, -50%);
-            font-size: 2.5rem;
+            font-size: 1.5rem;
             font-weight: 900;
             text-shadow: 0 0 10px rgba(0,0,0,0.8);
             opacity: 0;
@@ -429,7 +429,7 @@
 
 <script>
 /**
- * AI RHYTHM GAME - Enhanced Long Note Handling
+ * AI RHYTHM GAME - Touch Stuck Fix
  */
 
 // --- Constants ---
@@ -437,7 +437,6 @@ const LANES = 4;
 const PERFECT_WINDOW = 0.050;
 const GREAT_WINDOW = 0.100;
 const GOOD_WINDOW = 0.150;
-// 通常ノーツを叩くために一瞬離しても許される時間。これを超えるとMissになる。
 const GAP_WINDOW = 0.150; 
 
 // --- YouTube API Setup ---
@@ -500,8 +499,9 @@ class RhythmGame {
         
         // Input
         this.keyMap = { 'KeyD':0, 'KeyF':1, 'KeyJ':2, 'KeyK':3 };
-        // レーンごとのタッチ数（0ならオフ、1以上ならオン）
-        this.laneState = [0, 0, 0, 0];
+        this.laneState = [0, 0, 0, 0]; 
+        // 指IDとレーンの対応を保存するMap（スタック防止用）
+        this.touchLaneMap = new Map(); 
         
         // Canvas
         this.canvas = document.getElementById('game-layer');
@@ -531,7 +531,6 @@ class RhythmGame {
             if (!response.ok) throw new Error("List not found");
             const text = await response.text();
             
-            // Parse: Name(URL,file),
             const regex = /(.+?)\((.+?),(.+?)\),?/g;
             let match;
             
@@ -540,7 +539,6 @@ class RhythmGame {
                 const url = match[2].trim();
                 const jsonFile = match[3].trim();
                 
-                // Extract YouTube ID
                 let ytId = "";
                 if (url.includes('v=')) ytId = url.split('v=')[1].split('&')[0];
                 else if (url.includes('youtu.be/')) ytId = url.split('youtu.be/')[1].split('?')[0];
@@ -550,8 +548,6 @@ class RhythmGame {
             
             document.getElementById('loading-message').style.display = 'none';
             document.getElementById('menu-content').classList.remove('hidden');
-            
-            // Initial Render
             this.renderSongList("");
 
         } catch (e) {
@@ -565,10 +561,8 @@ class RhythmGame {
         listContainer.innerHTML = '';
         const startBtn = document.getElementById('start-btn');
         
-        // Normalize query
         const terms = query.toLowerCase().split(/\s+/).filter(t => t.length > 0);
 
-        // Filter Function (Fuzzy-ish)
         const filtered = this.songList.filter(song => {
             if (terms.length === 0) return true;
             const target = song.name.toLowerCase();
@@ -625,12 +619,11 @@ class RhythmGame {
                 return;
             }
 
-            // ノーツデータの初期化
             this.notes = JSON.parse(JSON.stringify(chartData));
             this.notes.forEach(n => {
-                n.lastReleaseTime = 0; // ロングノーツの中断時刻
-                n.missed = false; // ロングノーツの途中失敗フラグ
-                n.finished = false; // 処理完了フラグ
+                n.lastReleaseTime = 0; 
+                n.missed = false; 
+                n.finished = false; 
             });
             
             if (isYoutubeReady && player) {
@@ -660,14 +653,12 @@ class RhythmGame {
     bindInputs() {
         // Keyboard
         window.addEventListener('keydown', (e) => {
-            if (!this.isPlaying) return;
+            if (!this.isPlaying || e.repeat) return;
             if (e.code === 'Escape') this.stopGame();
             if (e.code in this.keyMap) {
                 const lane = this.keyMap[e.code];
-                if (this.laneState[lane] === 0) {
-                    this.handleInput(lane, 'down');
-                    this.laneState[lane] = 1;
-                }
+                this.handleInput(lane, 'down');
+                this.laneState[lane] = 1; 
             }
         });
         window.addEventListener('keyup', (e) => {
@@ -679,7 +670,7 @@ class RhythmGame {
             }
         });
 
-        // Touch (Enhanced Multi-touch)
+        // Touch Input (Fixed Logic)
         this.canvas.addEventListener('touchstart', (e) => {
             e.preventDefault();
             if (!this.isPlaying) return;
@@ -688,37 +679,38 @@ class RhythmGame {
                 const t = e.changedTouches[i];
                 const lane = this.getLaneFromX(t.clientX);
                 if (lane !== -1) {
+                    // タッチIDとレーンを紐付け
+                    this.touchLaneMap.set(t.identifier, lane);
+                    
                     this.handleInput(lane, 'down');
                     this.laneState[lane]++; 
                 }
             }
         }, { passive: false });
 
-        this.canvas.addEventListener('touchend', (e) => {
+        // Touchend / Cancel 共通処理
+        const handleTouchEnd = (e) => {
             e.preventDefault();
             if (!this.isPlaying) return;
             
             for (let i = 0; i < e.changedTouches.length; i++) {
                 const t = e.changedTouches[i];
-                const lane = this.getLaneFromX(t.clientX);
-                if (lane !== -1) {
-                    this.handleInput(lane, 'up');
-                    this.laneState[lane] = Math.max(0, this.laneState[lane] - 1);
-                }
-            }
-        });
+                // 離した指のIDが、どのレーンで登録されていたかを確認
+                const registeredLane = this.touchLaneMap.get(t.identifier);
 
-        this.canvas.addEventListener('touchcancel', (e) => {
-             e.preventDefault();
-             for (let i = 0; i < e.changedTouches.length; i++) {
-                const t = e.changedTouches[i];
-                const lane = this.getLaneFromX(t.clientX);
-                if (lane !== -1) {
-                    this.handleInput(lane, 'up');
-                    this.laneState[lane] = Math.max(0, this.laneState[lane] - 1);
+                if (registeredLane !== undefined) {
+                    // 登録されていたレーンに対してOFF処理を行う（指が画面外にあっても正しく処理される）
+                    this.handleInput(registeredLane, 'up');
+                    this.laneState[registeredLane] = Math.max(0, this.laneState[registeredLane] - 1);
+                    
+                    // マップから削除
+                    this.touchLaneMap.delete(t.identifier);
                 }
             }
-        });
+        };
+
+        this.canvas.addEventListener('touchend', handleTouchEnd);
+        this.canvas.addEventListener('touchcancel', handleTouchEnd);
 
         document.getElementById('btn-quit').addEventListener('click', () => this.stopGame());
     }
@@ -736,7 +728,10 @@ class RhythmGame {
         this.combo = 0;
         this.life = 1000;
         this.stats = { perfect:0, great:0, good:0, miss:0 };
+        // 状態の完全リセット
         this.laneState = [0, 0, 0, 0];
+        this.touchLaneMap.clear();
+
         this.updateHUD();
 
         this.isPlaying = true;
@@ -768,58 +763,53 @@ class RhythmGame {
         const now = this.getCurrentTime();
 
         if (action === 'down') {
-            // 1. 通常ノーツ（単押し・フリック・ロング始点）の判定
-            // 未処理で、ヒット範囲にあり、かつ終了していないもの
-            const hittable = this.notes.filter(n => 
-                !n.hit && !n.missed && n.lane === lane && n.type !== 'end' &&
+            const normalNotes = this.notes.filter(n => 
+                !n.hit && !n.missed && n.lane === lane && n.type !== 'end' && n.type !== 'long' &&
                 Math.abs(n.time - now) < GOOD_WINDOW
             );
             
-            // 手前にあるものを優先
-            hittable.sort((a,b) => Math.abs(a.time - now) - Math.abs(b.time - now));
+            normalNotes.sort((a,b) => Math.abs(a.time - now) - Math.abs(b.time - now));
             
-            let hitNormal = false;
-            if (hittable.length > 0) {
-                const note = hittable[0];
-                if (note.type !== 'long') {
-                    this.judge(note, now);
-                    hitNormal = true;
-                } else {
-                    // ロングノーツ始点
-                    note.holding = true;
-                    this.judge(note, now); // 始点判定
-                    hitNormal = true;
-                }
+            if (normalNotes.length > 0) {
+                this.judge(normalNotes[0], now);
+            }
+            
+            const longStarts = this.notes.filter(n => 
+                !n.hit && !n.missed && n.lane === lane && n.type === 'long' &&
+                Math.abs(n.time - now) < GOOD_WINDOW
+            );
+            
+            if (longStarts.length > 0) {
+                const note = longStarts[0];
+                note.holding = true;
+                this.judge(note, now);
             }
 
-            // 2. ロングノーツの復帰（GAP許容処理）
-            // すでにHit済みで、現在ホールドしておらず、まだ終了しておらず、ミスになっていないロングノーツ
             const suspendedNotes = this.notes.filter(n => 
                 n.hit && n.type === 'long' && 
                 !n.holding && !n.finished && !n.missed &&
-                n.lane === lane &&
-                (now < n.time + n.length)
+                n.lane === lane && (now < n.time + n.length)
             );
 
-            // 復帰判定: GAP_WINDOW内であれば復帰させる
             suspendedNotes.forEach(n => {
                 if (now - n.lastReleaseTime <= GAP_WINDOW) {
                     n.holding = true;
-                    // 通常ノーツを叩くためのリリースだった場合、ここで再開される
                 }
             });
 
         } else if (action === 'up') {
-            // ロングノーツを離した処理
-            // 即座にMISSにせず、holding=false にして lastReleaseTime を記録する
-            const activeLongs = this.notes.filter(n => 
-                n.hit && n.type === 'long' && n.holding && n.lane === lane && !n.finished
-            );
-            
-            activeLongs.forEach(n => {
-                n.holding = false;
-                n.lastReleaseTime = now;
-            });
+            // laneStateはここでチェックする（デクリメントされる前の値を見る）
+            // 2本以上の指で押している場合、1本離しても離したことにはしない
+            if (this.laneState[lane] <= 1) { 
+                const activeLongs = this.notes.filter(n => 
+                    n.hit && n.type === 'long' && n.holding && n.lane === lane && !n.finished
+                );
+                
+                activeLongs.forEach(n => {
+                    n.holding = false;
+                    n.lastReleaseTime = now;
+                });
+            }
         }
     }
 
@@ -999,44 +989,31 @@ class RhythmGame {
         }
 
         this.notes.forEach(note => {
-            // ロングノーツの状態監視ロジック
             if (note.type === 'long' && note.hit && !note.finished && !note.missed) {
                 const endTime = note.time + note.length;
 
-                // A. 終了時間を超えた場合 -> 成功で終了
                 if (now >= endTime) {
                     note.finished = true;
-                    // 最後のボーナススコア（判定扱い）
                     this.addScore('PERFECT');
                     return; 
                 }
 
-                // B. 離されている状態のチェック
                 if (!note.holding) {
-                    // GAP_WINDOW を超えて離されているか？
                     if (now - note.lastReleaseTime > GAP_WINDOW) {
-                        // タイムアウト -> ミスにする
                         this.breakCombo();
                         note.missed = true;
-                        note.finished = true; // 描画もしない
+                        note.finished = true;
                         return;
                     }
-                } else {
-                    // C. ホールド中 -> 継続的に判定（コンボは増やさないが、生きてることを示す）
-                    // 本格的な音ゲーではここでTickスコアが入るが、今回は視覚効果のみ維持
                 }
             }
 
-            // 描画スキップ条件
-            if (note.finished || note.missed) return; // 終了または失敗したノーツは描画しない
-            if (note.hit && note.type !== 'long') return; // ロング以外でHit済みなら描画しない
+            if (note.finished || note.missed) return;
+            if (note.hit && note.type !== 'long') return;
             
             const dt = note.time - now;
-            
-            // 描画範囲外
             if (dt > 10.0 / (this.noteSpeed/2)) return; 
             
-            // Miss判定（通り過ぎた）
             if (dt < -0.2 && note.type !== 'long') {
                 if(!note.hit) { note.hit = true; note.missed = true; this.breakCombo(); }
                 return;
@@ -1046,15 +1023,11 @@ class RhythmGame {
 
             const laneX = trackX + note.lane * laneW;
 
-            // --- ロングノーツの描画 ---
+            // --- ロングノーツ描画 ---
             if (note.type === 'long') {
                 const dtTail = (note.time + note.length) - now;
-                if (dtTail < 0) return; // 末尾も通り過ぎた
+                if (dtTail < 0) return; 
 
-                // Hit済みなら判定ライン(0)から、未Hitなら現在位置(dt)から
-                // ただし、Gap待機中(!holding)の場合、奥に逃げるのではなく「判定ラインで止まって待ってる」表現にするか、
-                // あるいは「判定ラインから少し離れた」表現にするか。
-                // ここでは「判定ラインに張り付いている」表現にする（ユーザーに押し直しを促すため）
                 const effDt = (note.hit) ? 0 : Math.max(0, dt);
                 
                 const headP = project(laneX, effDt);
@@ -1063,11 +1036,10 @@ class RhythmGame {
                 const tailPR = project(laneX + laneW, dtTail);
 
                 if (headP && tailP) {
-                    // ホールド中: 明るい色 / 離し中（Gap内）: 暗い色または警告色
                     if (note.hit && !note.holding) {
-                        this.ctx.fillStyle = 'rgba(255, 100, 100, 0.6)'; // 警告色
+                        this.ctx.fillStyle = 'rgba(255, 100, 100, 0.6)'; // 離してる警告色
                     } else {
-                        this.ctx.fillStyle = 'rgba(57, 197, 187, 0.7)'; // 通常色
+                        this.ctx.fillStyle = 'rgba(57, 197, 187, 0.7)';
                     }
                     
                     this.ctx.beginPath();
@@ -1079,8 +1051,7 @@ class RhythmGame {
                 }
             }
 
-            // --- ノーツ（頭）の描画 ---
-            // ロングノーツでHit済みの場合は頭を描画しない（帯だけ）
+            // --- ノーツ頭描画 ---
             if (!note.hit) {
                 const renderDt = dt;
                 if (renderDt < -0.1) return;
@@ -1096,12 +1067,7 @@ class RhythmGame {
                     else if (note.type === 'long') this.ctx.fillStyle = '#ffeb3b';
                     else this.ctx.fillStyle = '#39c5bb';
 
-                    this.ctx.shadowBlur = 10;
-                    this.ctx.shadowColor = this.ctx.fillStyle;
-                    
                     this.ctx.fillRect(p.x + 1, p.y - hNote/2, wNote - 2, hNote);
-                    this.ctx.shadowBlur = 0;
-
                     this.ctx.fillStyle = '#fff';
                     this.ctx.fillRect(p.x + 3, p.y - hNote/4, wNote - 6, hNote/2);
 
@@ -1122,7 +1088,6 @@ class RhythmGame {
 // --- Initialization ---
 const game = new RhythmGame();
 
-// UI Bindings
 document.getElementById('speed-range').addEventListener('input', (e) => {
     document.getElementById('speed-val').innerText = parseFloat(e.target.value).toFixed(1);
     game.noteSpeed = parseFloat(e.target.value);
