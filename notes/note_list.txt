@@ -7,6 +7,7 @@ ColorRiseHarmony(https://www.youtube.com/watch?v=oc7xMNpxUOM,ColorRiseHarmony.js
 GHOST-星街すいせい(https://youtu.be/IKKar5SS29E?si=kxb7BmVKJV5JGis4,GHOST-星街すいせい.json),
 StellarStellar-星街すいせい(https://youtu.be/a51VH9BYzZA?si=B2o7y5mp1jxpgvna,StellarStellar-星街すいせい.json),
 CaramelPain-星街すいせい(https://youtu.be/UpEPkPg8YP4?si=kSjLoWutoGyB1vj7,CaramelPain-星街すいせい.json),
+ソワレ-星街すいせい(https://youtu.be/mRgslQ5Z-kU?si=oP6QSfC5mkHNaL8w,ソワレ-星街すいせい.json),
 サクラカゼ-さくらみこ(https://youtu.be/X9zw0QF12Kc?si=PUh4JqZNVg7KwtCN,サクラカゼ-さくらみこ.json),
 SUNAO-さくらみこ(https://youtu.be/4ZafIoQ_g7Y?si=8AeKQ7LvQmsRF-ZX,SUNAO-さくらみこ.json),
 KONKONBeats-白上フブキ(https://www.youtube.com/watch?v=c2hbKnXIa_c,KONKONBeats-白上フブキ.json),
