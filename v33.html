@@ -1,0 +1,1620 @@
+<!DOCTYPE html>
+<html lang="ja">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
+    <title>ホロの音ゲー - MQTT Collab Mode (Fixed v2)</title>
+    <style>
+        @import url('https://fonts.googleapis.com/css2?family=Exo+2:wght@400;700;900&display=swap');
+
+        :root {
+            --primary: #39c5bb;
+            --accent: #ff0055;
+            --bg: #121212;
+            --text: #ffffff;
+            --opponent: #ff9900;
+        }
+
+        * {
+            box-sizing: border-box;
+            user-select: none;
+            -webkit-user-select: none;
+            -webkit-touch-callout: none;
+            -webkit-tap-highlight-color: transparent;
+        }
+
+        body, html {
+            margin: 0;
+            padding: 0;
+            width: 100%;
+            height: 100%;
+            overflow: hidden;
+            background-color: var(--bg);
+            font-family: 'Exo 2', sans-serif;
+            color: var(--text);
+        }
+
+        /* --- BACKGROUND: YouTube Layer --- */
+        #background-layer {
+            position: absolute;
+            top: 0;
+            left: 0;
+            width: 100%;
+            height: 100%;
+            z-index: 0;
+            overflow: hidden;
+            background: #000;
+            pointer-events: none;
+        }
+
+        #yt-player-container {
+            position: absolute;
+            top: 50%;
+            left: 50%;
+            width: 100vw;
+            height: 100vh;
+            transform: translate(-50%, -50%) scale(1.2);
+            pointer-events: none;
+        }
+        
+        iframe {
+            width: 100%;
+            height: 100%;
+            border: none;
+            pointer-events: none;
+        }
+
+        #visualizer-overlay {
+            position: absolute;
+            top: 0; left: 0;
+            width: 100%; height: 100%;
+            background: rgba(0,0,0,0.3);
+            z-index: 1;
+        }
+
+        /* --- GAME LAYERS --- */
+        #game-layer {
+            position: absolute;
+            top: 0; left: 0;
+            width: 100%; height: 100%;
+            z-index: 10;
+        }
+
+        #ui-layer {
+            position: absolute;
+            top: 0; left: 0;
+            width: 100%; height: 100%;
+            z-index: 20;
+            pointer-events: none;
+        }
+
+        .hud-element {
+            position: absolute;
+            pointer-events: auto;
+        }
+
+        #life-container {
+            top: 20px; left: 20px;
+            width: 250px; height: 15px;
+            background: rgba(0,0,0,0.5);
+            border: 2px solid #fff;
+            border-radius: 10px;
+            overflow: hidden;
+        }
+
+        #life-bar {
+            width: 100%; height: 100%;
+            background: #4caf50;
+            transition: width 0.2s, background 0.2s;
+        }
+
+        /* Multiplayer Opponent Score Bar */
+        #opponent-score-container {
+            top: 45px; left: 20px;
+            width: 250px;
+            font-size: 0.8rem;
+            color: var(--opponent);
+            text-align: left;
+            text-shadow: 1px 1px 0 #000;
+        }
+
+        #score-display {
+            top: 15px; right: 20px;
+            font-size: 1.8rem;
+            font-weight: 900;
+            text-shadow: 2px 2px 0 #000;
+            text-align: right;
+        }
+
+        #btn-quit {
+            top: 80px; left: 20px;
+            background: rgba(255, 50, 50, 0.8);
+            border: 1px solid #fff;
+            color: white;
+            padding: 5px 15px;
+            border-radius: 5px;
+            font-weight: bold;
+            font-size: 0.9rem;
+            cursor: pointer;
+            text-transform: uppercase;
+        }
+
+        #combo-container {
+            top: 35%; left: 50%;
+            transform: translate(-50%, -50%);
+            text-align: center;
+            display: none;
+        }
+
+        #combo-count {
+            font-size: 3.0rem;
+            font-weight: 900;
+            background: linear-gradient(to bottom, #fff, var(--primary));
+            -webkit-background-clip: text;
+            -webkit-text-fill-color: transparent;
+            line-height: 1;
+            filter: drop-shadow(0 0 5px rgba(57,197,187,0.5));
+        }
+
+        #combo-label {
+            font-size: 0.9rem;
+            letter-spacing: 5px;
+            color: var(--primary);
+            font-weight: bold;
+            text-shadow: 0 0 5px rgba(0,0,0,0.8);
+        }
+
+        #judge-display {
+            top: 60%; left: 50%;
+            transform: translate(-50%, -50%);
+            font-size: 1.5rem;
+            font-weight: 900;
+            text-shadow: 0 0 10px rgba(0,0,0,0.8);
+            opacity: 0;
+        }
+
+        .judge-perfect { color: #ffeb3b; }
+        .judge-great { color: #e91e63; }
+        .judge-good { color: #2196f3; }
+        .judge-miss { color: #9e9e9e; }
+
+        /* --- SCREENS --- */
+        .screen-container {
+            position: absolute;
+            top: 0; left: 0;
+            width: 100%; height: 100%;
+            z-index: 100;
+            pointer-events: none; 
+        }
+
+        .screen {
+            position: absolute;
+            width: 100%; height: 100%;
+            background: rgba(0,0,0,0.95);
+            transition: opacity 0.5s;
+            pointer-events: auto;
+            overflow-y: auto;
+            -webkit-overflow-scrolling: touch;
+        }
+
+        .screen-content {
+            display: flex;
+            flex-direction: column;
+            justify-content: center;
+            align-items: center;
+            min-height: 100%;
+            width: 100%;
+            padding: 40px 0;
+        }
+
+        .hidden {
+            opacity: 0;
+            pointer-events: none !important;
+            visibility: hidden;
+        }
+
+        h1 { font-style: italic; text-transform: uppercase; letter-spacing: 2px; text-shadow: 0 0 10px var(--primary); margin: 0 0 20px 0; font-size: 3rem; }
+
+        .title-logo {
+            max-width: 100px;
+            height: auto;
+            margin-bottom: 10px;
+        }
+
+        .btn {
+            background: linear-gradient(45deg, var(--primary), #2a9d8f);
+            border: 2px solid #fff;
+            color: white;
+            padding: 15px 40px;
+            font-size: 1.2rem;
+            font-weight: bold;
+            border-radius: 30px;
+            cursor: pointer;
+            text-transform: uppercase;
+            box-shadow: 0 0 15px var(--primary);
+            transition: transform 0.1s, background 0.2s;
+            margin: 10px;
+            display: inline-block;
+            text-align: center;
+            text-decoration: none;
+        }
+        .btn:active { transform: scale(0.95); }
+        .btn:disabled { background: #555; box-shadow: none; cursor: not-allowed; opacity: 0.7; }
+        
+        .btn-collab {
+            background: linear-gradient(45deg, var(--opponent), #d35400);
+            box-shadow: 0 0 15px var(--opponent);
+        }
+
+        .settings-group {
+            background: rgba(255,255,255,0.1);
+            padding: 20px;
+            border-radius: 10px;
+            margin: 10px;
+            text-align: center;
+            width: 90%;
+            max-width: 500px;
+            backdrop-filter: blur(5px);
+        }
+
+        .footer-container {
+            margin-top: 20px;
+            display: flex;
+            gap: 10px;
+            justify-content: center;
+        }
+
+        .btn-footer {
+            padding: 8px 20px;
+            font-size: 0.9rem;
+            background: rgba(255, 255, 255, 0.1);
+            border: 1px solid var(--primary);
+            box-shadow: none;
+        }
+        .btn-footer:hover {
+            background: var(--primary);
+            color: #000;
+        }
+        .footer-container2 {
+            margin-top: 20px;
+            display: flex;
+            gap: 10px;
+            justify-content: center;
+        }
+
+        label { display: block; margin-bottom: 5px; font-weight: bold; color: var(--primary); }
+        select, input[type=range], input[type=text] {
+            width: 100%;
+            padding: 10px;
+            margin-bottom: 15px;
+            background: #222;
+            color: white;
+            border: 1px solid var(--primary);
+            border-radius: 5px;
+            font-family: inherit;
+        }
+
+        /* --- SEARCH LIST STYLE --- */
+        #search-container {
+            position: relative;
+            width: 100%;
+            margin-bottom: 15px;
+        }
+
+        #song-search {
+            margin-bottom: 5px;
+        }
+
+        #song-list-scroll {
+            /* Changed from 150px to 320px for ~8 songs */
+            max-height: 320px;
+            overflow-y: auto;
+            border: 1px solid #444;
+            border-radius: 5px;
+            background: rgba(0,0,0,0.5);
+            text-align: left;
+        }
+        
+        #song-list-scroll::-webkit-scrollbar { width: 8px; }
+        #song-list-scroll::-webkit-scrollbar-track { background: #111; }
+        #song-list-scroll::-webkit-scrollbar-thumb { background: #444; border-radius: 4px; }
+        #song-list-scroll::-webkit-scrollbar-thumb:hover { background: var(--primary); }
+
+        .song-item {
+            padding: 10px;
+            border-bottom: 1px solid #333;
+            cursor: pointer;
+            transition: background 0.2s;
+            font-size: 0.95rem;
+        }
+
+        .song-item:hover {
+            background: rgba(57, 197, 187, 0.2);
+        }
+
+        .song-item.selected {
+            background: var(--primary);
+            color: #000;
+            font-weight: bold;
+        }
+
+        .no-result {
+            padding: 10px;
+            color: #888;
+            font-style: italic;
+            text-align: center;
+        }
+        
+        #loading-message { font-size: 1.2rem; color: var(--primary); animation: blink 1s infinite; }
+        @keyframes blink { 50% { opacity: 0.5; } }
+
+        /* --- COLLAB LOBBY STYLE --- */
+        .lobby-status {
+            color: var(--opponent);
+            font-weight: bold;
+            margin-bottom: 10px;
+            font-size: 1.2rem;
+        }
+        #lobby-list {
+            width: 100%;
+            background: rgba(0,0,0,0.6);
+            border: 1px solid var(--opponent);
+            border-radius: 5px;
+            padding: 10px;
+            max-height: 250px;
+            overflow-y: auto;
+            text-align: left;
+            margin-bottom: 15px;
+        }
+        
+        .lobby-user {
+            padding: 8px;
+            border-bottom: 1px solid #444;
+            font-size: 0.9rem;
+            cursor: pointer;
+            transition: background 0.2s;
+            border-radius: 4px;
+            margin-bottom: 4px;
+        }
+        .lobby-user:hover {
+            background: rgba(255, 153, 0, 0.1);
+        }
+        .lobby-user.matched {
+            background: rgba(255, 153, 0, 0.3);
+            color: #fff;
+            cursor: default;
+        }
+        
+        .lobby-user-header {
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+        }
+        .lobby-song-info {
+            font-size: 0.8rem;
+            color: #aaa;
+            margin-top: 3px;
+            padding-left: 5px;
+            border-left: 2px solid var(--primary);
+        }
+        .lobby-join-hint {
+            font-size: 0.75rem;
+            color: var(--primary);
+            font-weight: bold;
+            display: none;
+        }
+        .lobby-user:hover .lobby-join-hint {
+            display: inline;
+        }
+
+        .status-badge {
+            font-size: 0.75rem;
+            padding: 2px 6px;
+            border-radius: 4px;
+            background: #444;
+        }
+        .status-waiting { background: #2a9d8f; color: white; }
+        .status-playing { background: #e91e63; color: white; }
+    </style>
+    <script>window.dataLayer = window.dataLayer || []; function gtag(){dataLayer.push(arguments);} gtag('js', new Date());</script>
+</head>
+<body>
+
+    <div id="background-layer">
+        <div id="yt-player-container">
+            <div id="yt-player"></div>
+        </div>
+        <div id="visualizer-overlay"></div>
+    </div>
+
+    <canvas id="game-layer"></canvas>
+
+    <div id="ui-layer" class="hidden">
+        <div id="life-container" class="hud-element"><div id="life-bar"></div></div>
+        <div id="opponent-score-container" class="hud-element hidden">
+            VS: <span id="opponent-name-hud">Opponent</span> - <span id="opponent-score-val">0</span>
+        </div>
+        <button id="btn-quit" class="hud-element">QUIT</button>
+        <div id="score-display" class="hud-element">SCORE: <span id="score-val">0</span></div>
+        <div id="combo-container" class="hud-element">
+            <div id="combo-count">0</div>
+            <div id="combo-label">COMBO</div>
+        </div>
+        <div id="judge-display" class="hud-element">PERFECT</div>
+    </div>
+
+    <div class="screen-container">
+        
+        <div id="title-screen" class="screen">
+            <div class="screen-content">
+                <img src="https://i.imgur.com/ujQpGlp.png" alt="Logo" class="title-logo">
+                <h1>ホロの音ゲー</h1>
+                <p>Made by Yytanuki</p>
+                <div id="loading-message">Loading Song List...</div>
+                
+                <div class="settings-group hidden" id="menu-content">
+                    <div id="main-menu-buttons">
+                        <button id="btn-solo" class="btn">SOLO PLAY</button>
+                        <button id="btn-collab" class="btn btn-collab">COLLAB MODE</button>
+                    </div>
+
+                    <div id="song-select-area" class="hidden">
+                         <div id="collab-info" class="hidden">
+                            <div class="lobby-status">COLLAB LOBBY</div>
+                            <input type="text" id="player-name" placeholder="Enter Your Name" maxlength="10" value="Guest">
+                            <div style="font-size:0.8rem; margin:5px 0;">Select a song or click a player to join</div>
+                            <div id="lobby-list">
+                                <div style="color:#888; text-align:center;">Looking for players...</div>
+                            </div>
+                         </div>
+
+                        <div style="grid-column: 1 / -1;">
+                            <label>SELECT SONG</label>
+                            <div id="search-container">
+                                <input type="text" id="song-search" placeholder="Type to search..." autocomplete="off">
+                                <div id="song-list-scroll">
+                                </div>
+                            </div>
+                        </div>
+                        <div>
+                            <label>DIFFICULTY</label>
+                            <select id="diff-select">
+                                <option value="0">EASY</option>
+                                <option value="1">NORMAL</option>
+                                <option value="2">HARD</option>
+                                <option value="3">EXPERT</option>
+                                <option value="4">MASTER</option>
+                            </select>
+                        </div>
+                        <div>
+                            <label>SPEED: <span id="speed-val">12.0</span></label>
+                            <input type="range" id="speed-range" min="1" max="15" step="0.5" value="12.0">
+                        </div>
+                        <button id="start-btn" class="btn" disabled>SELECT A SONG</button>
+                        <button id="back-btn" class="btn" style="background:transparent; border:1px solid #aaa; font-size:0.9rem; padding:10px 20px; margin-top:5px;">BACK</button>
+                    </div>
+                </div>
+                    <div class="footer-container">
+                        <a href="https://x.com/TanukiYy" target="_blank" class="btn btn-footer">作者X</a>
+                        <a href="https://forms.gle/sM3ctNs1gpm1eiBBA" target="_blank" class="btn btn-footer">曲のリクエストやバグ報告</a>
+                    </div>
+                <div class="footer-container2">
+                        <p>音源や映像はYouTube埋め込みです。<br>非公式ファンサイト。</p>
+                </div>
+            </div>
+        </div>
+
+        <div id="loading-screen" class="screen hidden">
+            <div class="screen-content">
+                <h2>LOADING DATA...</h2>
+                <div id="match-status" style="margin-top:20px; color:var(--opponent); display:none;">OPPONENT FOUND! STARTING...</div>
+            </div>
+        </div>
+
+        <div id="result-screen" class="screen hidden">
+            <div class="screen-content">
+                <h2 id="res-title" style="font-size:3rem; margin-bottom:10px;">FULL COMBO!</h2>
+                
+                <div id="collab-result-area" style="display:none; margin-bottom:20px; padding:20px; background:rgba(255,153,0,0.1); border:2px solid var(--opponent); border-radius:10px;">
+                    <h3 id="win-lose-text" style="font-size:2.5rem; margin:0;">WIN</h3>
+                    <div style="display:flex; gap:20px; justify-content:center; margin-top:10px;">
+                        <div>YOU: <span id="my-final-score">0</span></div>
+                        <div>VS: <span id="op-final-score">0</span></div>
+                    </div>
+                </div>
+
+                <div style="font-size:1.5rem;">SCORE: <span id="result-score">0</span></div>
+                <div style="font-size:1.2rem; margin:10px;">MAX COMBO: <span id="result-combo">0</span></div>
+                <div style="display:grid; grid-template-columns: 1fr 1fr; gap:15px; text-align:left; margin:20px; background:rgba(255,255,255,0.1); padding:20px; border-radius:10px;">
+                    <div class="judge-perfect">PERFECT</div><div id="res-perf">0</div>
+                    <div class="judge-great">GREAT</div><div id="res-great">0</div>
+                    <div class="judge-good">GOOD</div><div id="res-good">0</div>
+                    <div class="judge-miss">MISS</div><div id="res-miss">0</div>
+                </div>
+                <button class="btn" onclick="game.returnToTitle()">BACK TO TITLE</button>
+            </div>
+        </div>
+    </div>
+
+<script src="https://unpkg.com/mqtt/dist/mqtt.min.js"></script>
+
+<script>
+// Initialize Game Global
+let game;
+
+// --- Constants ---
+const LANES = 4;
+const PERFECT_WINDOW = 0.050;
+const GREAT_WINDOW = 0.100;
+const GOOD_WINDOW = 0.150;
+const GAP_WINDOW = 0.150; 
+const DIFF_NAMES = ["EASY", "NORMAL", "HARD", "EXPERT", "MASTER"];
+
+// --- YouTube API Setup ---
+let player;
+let isYoutubeReady = false;
+
+function onYouTubeIframeAPIReady() {
+    player = new YT.Player('yt-player', {
+        height: '100%',
+        width: '100%',
+        videoId: '', 
+        playerVars: {
+            'autoplay': 0, 'controls': 0, 'disablekb': 1,     
+            'fs': 0, 'iv_load_policy': 3, 'modestbranding': 1,
+            'rel': 0, 'playsinline': 1    
+        },
+        events: {
+            'onReady': onPlayerReady,
+            'onStateChange': onPlayerStateChange
+        }
+    });
+}
+
+function onPlayerReady(event) {
+    isYoutubeReady = true;
+    console.log("YouTube Player Ready");
+}
+
+function onPlayerStateChange(event) {
+    // Only finish game if we are actively playing
+    if (event.data === YT.PlayerState.ENDED && game && game.isPlaying) {
+        game.finishGame();
+    }
+}
+
+// Load YouTube API
+const tag = document.createElement('script');
+tag.src = "https://www.youtube.com/iframe_api";
+const firstScriptTag = document.getElementsByTagName('script')[0];
+firstScriptTag.parentNode.insertBefore(tag, firstScriptTag);
+
+
+// --- Multiplayer Manager (MQTT Version) ---
+class MultiplayerManager {
+    constructor() {
+        this.client = null;
+        // Public Free Broker
+        this.brokerUrl = 'wss://broker.emqx.io:8084/mqtt';
+        this.topic = 'holo-rhythm-game-2025/global';
+        
+        this.myId = 'user-' + Math.floor(Math.random() * 100000);
+        this.myName = "Guest" + Math.floor(Math.random() * 1000);
+        
+        // Internal State
+        this.myStatus = 'IDLE'; // IDLE, WAITING, PLAYING
+        this.currentSongIndex = -1;
+        this.currentDiff = 1;
+        this.currentScore = 0;
+        
+        // Peers List: Map<id, {data, timestamp}>
+        this.peers = new Map();
+        
+        // Opponent Info
+        this.opponentId = null;
+        this.opponentName = "";
+        this.opponentScore = 0;
+        
+        this.heartbeatInterval = null;
+        this.cleanupInterval = null;
+        this.connected = false;
+    }
+
+    init() {
+        if (this.connected) return;
+
+        console.log("Connecting to Free MQTT Broker...");
+        this.client = mqtt.connect(this.brokerUrl);
+
+        this.client.on('connect', () => {
+            console.log("MQTT Connected!");
+            this.connected = true;
+            this.client.subscribe(this.topic, (err) => {
+                if (!err) {
+                    console.log("Subscribed to lobby topic");
+                    this.startHeartbeat();
+                }
+            });
+        });
+
+        this.client.on('message', (topic, message) => {
+            try {
+                const data = JSON.parse(message.toString());
+                this.handleMessage(data);
+            } catch (e) {
+                // Ignore malformed messages
+            }
+        });
+
+        this.client.on('error', (err) => {
+            console.error('Connection error: ', err);
+            this.client.end();
+        });
+    }
+
+    startHeartbeat() {
+        this.heartbeatInterval = setInterval(() => {
+            if (!this.connected) return;
+            const payload = {
+                id: this.myId,
+                name: this.myName,
+                status: this.myStatus,
+                songIndex: this.currentSongIndex,
+                difficulty: this.currentDiff,
+                score: this.currentScore,
+                opponentId: this.opponentId 
+            };
+            this.client.publish(this.topic, JSON.stringify(payload));
+        }, 1000);
+
+        this.cleanupInterval = setInterval(() => {
+            const now = Date.now();
+            this.peers.forEach((val, key) => {
+                if (now - val.timestamp > 3000) {
+                    this.peers.delete(key);
+                    this.updateLobbyUI(); 
+                }
+            });
+        }, 2000);
+    }
+
+    updateMyPresence() {
+        if (this.connected) {
+            const payload = {
+                id: this.myId,
+                name: this.myName,
+                status: this.myStatus,
+                songIndex: this.currentSongIndex,
+                difficulty: this.currentDiff,
+                score: this.currentScore,
+                opponentId: this.opponentId
+            };
+            this.client.publish(this.topic, JSON.stringify(payload));
+        }
+    }
+
+    handleMessage(data) {
+        if (data.id === this.myId) return; 
+
+        this.peers.set(data.id, { data: data, timestamp: Date.now() });
+
+        if (this.myStatus === 'IDLE' || this.myStatus === 'WAITING') {
+            this.updateLobbyUI();
+        }
+
+        // Matching Logic
+        if (this.myStatus === 'WAITING' && data.status === 'WAITING') {
+            if (data.songIndex === this.currentSongIndex && data.difficulty === this.currentDiff) {
+                // Match Found!
+                this.foundMatch(data.id, data.name);
+            }
+        }
+        
+        // Opponent Score Update
+        if (this.myStatus === 'PLAYING' && data.id === this.opponentId) {
+            this.opponentScore = data.score;
+            const opScoreEl = document.getElementById('opponent-score-val');
+            if(opScoreEl) opScoreEl.innerText = this.opponentScore;
+        }
+    }
+
+    updateLobbyUI() {
+        const lobbyList = document.getElementById('lobby-list');
+        if (!lobbyList || game.isPlaying) return;
+
+        lobbyList.innerHTML = '';
+        let count = 0;
+
+        if(!game.songList || game.songList.length === 0) return;
+
+        this.peers.forEach((peer) => {
+            const state = peer.data;
+            const div = document.createElement('div');
+            div.className = 'lobby-user';
+            
+            let statusText = state.status;
+            let badgeClass = 'status-badge';
+            let extraInfo = '';
+            let canJoin = false;
+            
+            if (state.status === 'WAITING') {
+                if (state.songIndex === this.currentSongIndex && state.difficulty === this.currentDiff) {
+                    statusText = "MATCHING...";
+                    div.classList.add('matched');
+                } else {
+                    statusText = "WAITING";
+                    badgeClass += ' status-waiting';
+                    
+                    const sName = game.songList[state.songIndex] ? game.songList[state.songIndex].name : "Unknown";
+                    const dName = DIFF_NAMES[state.difficulty] || "?";
+                    
+                    extraInfo = `
+                    <div class="lobby-song-info">
+                        ${sName} [${dName}] <span class="lobby-join-hint">CLICK TO JOIN</span>
+                    </div>`;
+                    
+                    canJoin = true;
+                }
+            } else if (state.status === 'PLAYING') {
+                badgeClass += ' status-playing';
+                const sName = game.songList[state.songIndex] ? game.songList[state.songIndex].name : "Unknown";
+                extraInfo = `<div class="lobby-song-info">Playing: ${sName}</div>`;
+            } else {
+                statusText = "IDLE";
+            }
+
+            div.innerHTML = `
+                <div class="lobby-user-header">
+                    <span style="font-weight:bold;">${state.name}</span>
+                    <span class="${badgeClass}">${statusText}</span>
+                </div>
+                ${extraInfo}
+            `;
+
+            if (canJoin) {
+                div.onclick = () => {
+                    game.joinSpecificLobby(state.songIndex, state.difficulty);
+                };
+            }
+
+            lobbyList.appendChild(div);
+            count++;
+        });
+
+        if (count === 0) lobbyList.innerHTML = '<div style="color:#888; text-align:center;">No other players online.</div>';
+    }
+
+    startWaiting(songIndex, diff) {
+        this.currentSongIndex = songIndex;
+        this.currentDiff = diff;
+        this.myStatus = 'WAITING';
+        this.currentScore = 0;
+        this.opponentId = null;
+        this.updateMyPresence();
+        
+        document.getElementById('start-btn').innerText = "WAITING FOR OPPONENT...";
+        document.getElementById('start-btn').disabled = true;
+    }
+
+    cancelWaiting() {
+        this.myStatus = 'IDLE';
+        this.currentSongIndex = -1; // Reset song to avoid auto-match
+        this.updateMyPresence();
+        
+        // Reset UI immediately
+        const startBtn = document.getElementById('start-btn');
+        if(startBtn) {
+            // Check if a song is actually selected in UI to determine text
+            if(game && game.selectedSongIndex !== null) {
+                const sName = game.songList[game.selectedSongIndex].name;
+                startBtn.innerText = game.isMultiplayerMode ? "WAIT FOR OPPONENT: " + sName : "START: " + sName;
+                startBtn.disabled = false;
+            } else {
+                startBtn.innerText = "SELECT A SONG";
+                startBtn.disabled = true;
+            }
+        }
+    }
+
+    foundMatch(opponentId, opponentName) {
+        if (this.myStatus === 'PLAYING') return;
+
+        console.log("Match Found!", opponentName);
+        this.opponentId = opponentId;
+        this.opponentName = opponentName;
+        this.myStatus = 'PLAYING';
+        this.updateMyPresence(); 
+
+        game.startMultiplayerGame(opponentName);
+    }
+    
+    updateScore(score) {
+        this.currentScore = score;
+    }
+}
+
+
+// --- Game Class ---
+class RhythmGame {
+    constructor() {
+        this.isMultiplayerMode = false;
+        this.mpManager = new MultiplayerManager();
+
+        this.notes = [];
+        this.score = 0;
+        this.combo = 0;
+        this.maxCombo = 0;
+        this.life = 1000;
+        this.isPlaying = false;
+        
+        // Load Speed from LocalStorage
+        const savedSpeed = localStorage.getItem('holoNoteSpeed');
+        this.noteSpeed = savedSpeed ? parseFloat(savedSpeed) : 8.0;
+
+        this.difficulty = 1;
+        this.stats = { perfect:0, great:0, good:0, miss:0 };
+        
+        this.keyMap = { 'KeyD':0, 'KeyF':1, 'KeyJ':2, 'KeyK':3 };
+        this.laneState = [0, 0, 0, 0]; 
+        this.touchLaneMap = new Map(); 
+        
+        this.canvas = document.getElementById('game-layer');
+        this.ctx = this.canvas.getContext('2d');
+        this.trackDims = { x:0, w:0, laneW:0 };
+        
+        this.resize();
+        window.addEventListener('resize', () => this.resize());
+        this.bindInputs();
+
+        this.songList = [];
+        this.selectedSongIndex = null;
+        this.currentSongData = null; 
+        this.currentYoutubeId = "";
+        
+        this.setupUI();
+    }
+
+    setupUI() {
+        document.getElementById('btn-solo').addEventListener('click', () => {
+            this.isMultiplayerMode = false;
+            this.showSongSelect();
+        });
+        document.getElementById('btn-collab').addEventListener('click', () => {
+            this.isMultiplayerMode = true;
+            this.mpManager.init(); 
+            document.getElementById('collab-info').classList.remove('hidden');
+            document.getElementById('player-name').value = this.mpManager.myName;
+            this.showSongSelect();
+        });
+        
+        document.getElementById('back-btn').addEventListener('click', () => {
+             document.getElementById('song-select-area').classList.add('hidden');
+             document.getElementById('main-menu-buttons').classList.remove('hidden');
+             document.getElementById('collab-info').classList.add('hidden');
+             if(this.isMultiplayerMode) this.mpManager.cancelWaiting();
+        });
+        
+        document.getElementById('player-name').addEventListener('input', (e) => {
+            if(this.mpManager) {
+                this.mpManager.myName = e.target.value || "Guest";
+                this.mpManager.updateMyPresence();
+            }
+        });
+
+        document.getElementById('song-search').addEventListener('input', (e) => this.renderSongList(e.target.value));
+        
+        // Speed Slider Setup (Initialize with saved value)
+        const speedRange = document.getElementById('speed-range');
+        const speedVal = document.getElementById('speed-val');
+        speedRange.value = this.noteSpeed;
+        speedVal.innerText = this.noteSpeed.toFixed(1);
+
+        speedRange.addEventListener('input', (e) => {
+            const val = parseFloat(e.target.value);
+            speedVal.innerText = val.toFixed(1);
+            this.noteSpeed = val;
+            // Save to LocalStorage
+            localStorage.setItem('holoNoteSpeed', val);
+        });
+
+        document.getElementById('diff-select').addEventListener('change', (e) => this.difficulty = parseInt(e.target.value));
+
+        document.getElementById('start-btn').addEventListener('click', () => {
+            if (this.selectedSongIndex === null) return;
+            
+            if (this.isMultiplayerMode) {
+                this.mpManager.startWaiting(this.songList[this.selectedSongIndex].originalIndex, this.difficulty);
+            } else {
+                this.loadSelectedSong();
+            }
+        });
+
+        document.getElementById('btn-quit').addEventListener('click', () => this.stopGame());
+    }
+
+    showSongSelect() {
+        document.getElementById('main-menu-buttons').classList.add('hidden');
+        document.getElementById('song-select-area').classList.remove('hidden');
+        this.renderSongList("");
+    }
+    
+    joinSpecificLobby(songIdx, diff) {
+        if (!this.isMultiplayerMode) return;
+        
+        // 1. Force Local State Update First
+        this.selectedSongIndex = songIdx;
+        this.difficulty = diff;
+        
+        // 2. Update UI Elements
+        document.getElementById('diff-select').value = diff;
+        this.renderSongList(""); 
+
+        const songName = this.songList[songIdx].name;
+        document.getElementById('start-btn').innerText = "JOINING: " + songName + "...";
+        document.getElementById('start-btn').disabled = true;
+        
+        // 3. Enter Waiting Mode (Triggers Match)
+        this.mpManager.startWaiting(songIdx, diff);
+    }
+
+    async fetchSongList() {
+        try {
+            const response = await fetch('./notes/note_list.txt');
+            if (!response.ok) throw new Error("List not found");
+            const text = await response.text();
+            
+            const regex = /(.+?)\((.+?),(.+?)\),?/g;
+            let match;
+            
+            while ((match = regex.exec(text)) !== null) {
+                const name = match[1].trim();
+                const url = match[2].trim();
+                const jsonFile = match[3].trim();
+                
+                let ytId = "";
+                if (url.includes('v=')) ytId = url.split('v=')[1].split('&')[0];
+                else if (url.includes('youtu.be/')) ytId = url.split('youtu.be/')[1].split('?')[0];
+                
+                this.songList.push({ name, ytId, jsonFile, originalIndex: this.songList.length });
+            }
+            
+            document.getElementById('loading-message').style.display = 'none';
+            document.getElementById('menu-content').classList.remove('hidden');
+
+        } catch (e) {
+            document.getElementById('loading-message').innerText = "ERROR: Could not load note_list.txt";
+            console.error(e);
+        }
+    }
+
+    renderSongList(query) {
+        const listContainer = document.getElementById('song-list-scroll');
+        listContainer.innerHTML = '';
+        const startBtn = document.getElementById('start-btn');
+        
+        const terms = query.toLowerCase().split(/\s+/).filter(t => t.length > 0);
+
+        const filtered = this.songList.filter(song => {
+            if (terms.length === 0) return true;
+            const target = song.name.toLowerCase();
+            return terms.every(term => target.includes(term));
+        });
+
+        if (filtered.length === 0) {
+            const div = document.createElement('div');
+            div.className = 'no-result';
+            div.innerText = 'No songs found.';
+            listContainer.appendChild(div);
+            return;
+        }
+
+        filtered.forEach(song => {
+            const div = document.createElement('div');
+            div.className = 'song-item';
+            if (this.selectedSongIndex === song.originalIndex) {
+                div.classList.add('selected');
+            }
+            div.innerText = song.name;
+            
+            div.addEventListener('click', () => {
+                this.selectedSongIndex = song.originalIndex;
+                document.querySelectorAll('.song-item').forEach(el => el.classList.remove('selected'));
+                div.classList.add('selected');
+                startBtn.disabled = false;
+                
+                if (this.isMultiplayerMode) {
+                    startBtn.innerText = "WAIT FOR OPPONENT: " + song.name;
+                } else {
+                    startBtn.innerText = "START: " + song.name;
+                }
+                
+                if(this.mpManager.myStatus === 'WAITING') {
+                    this.mpManager.cancelWaiting();
+                    startBtn.innerText = "WAIT FOR OPPONENT: " + song.name;
+                }
+            });
+            
+            listContainer.appendChild(div);
+        });
+    }
+
+    async loadSelectedSong() {
+        if (this.selectedSongIndex === null) return;
+        
+        const song = this.songList[this.selectedSongIndex];
+        this.currentYoutubeId = song.ytId;
+
+        document.getElementById('title-screen').classList.add('hidden');
+        document.getElementById('loading-screen').classList.remove('hidden');
+
+        try {
+            const res = await fetch(`./notes/${song.jsonFile}`);
+            if(!res.ok) throw new Error("JSON not found");
+            this.currentSongData = await res.json();
+            
+            const chartData = this.currentSongData.charts[this.difficulty];
+            
+            if (!chartData || chartData.length === 0) {
+                alert("This difficulty does not exist for this song.");
+                this.returnToTitle(); // Safe exit
+                return;
+            }
+
+            this.notes = JSON.parse(JSON.stringify(chartData));
+            this.notes.forEach(n => {
+                n.lastReleaseTime = 0; 
+                n.missed = false; 
+                n.finished = false; 
+            });
+            
+            // Check Player Readiness
+            if (isYoutubeReady && player) {
+                player.cueVideoById(this.currentYoutubeId);
+                // Slightly increased buffer and error check
+                setTimeout(() => {
+                   if (player && typeof player.playVideo === 'function') {
+                       this.startGame();
+                   } else {
+                       // Fail safe if player crashed
+                       alert("Video Player Error. Please try again.");
+                       this.returnToTitle();
+                   }
+                }, 2000);
+            } else {
+                alert("YouTube Player not ready. Please refresh.");
+                this.returnToTitle();
+            }
+
+        } catch (e) {
+            alert("Error loading chart data: " + e.message);
+            console.error(e);
+            this.returnToTitle();
+        }
+    }
+
+    startMultiplayerGame(opponentName) {
+        document.getElementById('match-status').style.display = 'block';
+        document.getElementById('match-status').innerText = `VS ${opponentName}! STARTING...`;
+        
+        // Show Loading Screen
+        document.getElementById('title-screen').classList.add('hidden');
+        document.getElementById('loading-screen').classList.remove('hidden');
+
+        // Load data normally
+        this.loadSelectedSong().then(() => {
+            document.getElementById('opponent-score-container').classList.remove('hidden');
+            document.getElementById('opponent-name-hud').innerText = opponentName;
+            document.getElementById('opponent-score-val').innerText = "0";
+        });
+    }
+
+    // --- Game Logic ---
+
+    resize() {
+        this.canvas.width = window.innerWidth;
+        this.canvas.height = window.innerHeight;
+        const trackW = Math.min(this.canvas.width, 800);
+        const trackX = (this.canvas.width - trackW) / 2;
+        this.trackDims = { x: trackX, w: trackW, laneW: trackW / LANES };
+    }
+
+    bindInputs() {
+        window.addEventListener('keydown', (e) => {
+            if (!this.isPlaying || e.repeat) return;
+            if (e.code === 'Escape') this.stopGame();
+            if (e.code in this.keyMap) {
+                const lane = this.keyMap[e.code];
+                this.handleInput(lane, 'down');
+                this.laneState[lane] = 1; 
+            }
+        });
+        window.addEventListener('keyup', (e) => {
+            if (!this.isPlaying) return;
+            if (e.code in this.keyMap) {
+                const lane = this.keyMap[e.code];
+                this.handleInput(lane, 'up');
+                this.laneState[lane] = 0;
+            }
+        });
+
+        this.canvas.addEventListener('touchstart', (e) => {
+            e.preventDefault();
+            if (!this.isPlaying) return;
+            
+            for (let i = 0; i < e.changedTouches.length; i++) {
+                const t = e.changedTouches[i];
+                const lane = this.getLaneFromX(t.clientX);
+                if (lane !== -1) {
+                    this.touchLaneMap.set(t.identifier, lane);
+                    this.handleInput(lane, 'down');
+                    this.laneState[lane]++; 
+                }
+            }
+        }, { passive: false });
+
+        const handleTouchEnd = (e) => {
+            e.preventDefault();
+            if (!this.isPlaying) return;
+            
+            for (let i = 0; i < e.changedTouches.length; i++) {
+                const t = e.changedTouches[i];
+                const lane = this.touchLaneMap.get(t.identifier);
+
+                if (lane !== undefined) {
+                    this.handleInput(lane, 'up');
+                    this.laneState[lane] = Math.max(0, this.laneState[lane] - 1);
+                    this.touchLaneMap.delete(t.identifier);
+                }
+            }
+        };
+
+        this.canvas.addEventListener('touchend', handleTouchEnd);
+        this.canvas.addEventListener('touchcancel', handleTouchEnd);
+    }
+
+    getLaneFromX(x) {
+        if (x < this.trackDims.x || x > this.trackDims.x + this.trackDims.w) return -1;
+        return Math.floor((x - this.trackDims.x) / this.trackDims.laneW);
+    }
+
+    startGame() {
+        // Double check strict visibility
+        document.getElementById('loading-screen').classList.add('hidden');
+        document.getElementById('match-status').style.display = 'none';
+        document.getElementById('ui-layer').classList.remove('hidden');
+        
+        // Reset Logic
+        this.score = 0;
+        this.combo = 0;
+        this.life = 1000;
+        this.stats = { perfect:0, great:0, good:0, miss:0 };
+        this.laneState = [0, 0, 0, 0];
+        this.touchLaneMap.clear();
+
+        // FIX: Explicitly Reset UI Elements for Combo
+        document.getElementById('combo-count').innerText = "0";
+        document.getElementById('combo-container').style.display = 'none';
+        
+        // FIX: Ensure Opponent UI is hidden for Solo
+        if (!this.isMultiplayerMode) {
+            document.getElementById('opponent-score-container').classList.add('hidden');
+            document.getElementById('opponent-name-hud').innerText = "";
+            document.getElementById('opponent-score-val').innerText = "0";
+        }
+
+        this.updateHUD();
+
+        this.isPlaying = true;
+        player.playVideo();
+        this.loop();
+    }
+
+    stopGame() {
+        this.isPlaying = false;
+        if (player && typeof player.pauseVideo === 'function') {
+            player.pauseVideo();
+        }
+        if (this.isMultiplayerMode) {
+             this.mpManager.cancelWaiting();
+             document.getElementById('opponent-score-container').classList.add('hidden');
+        }
+        this.returnToTitle();
+    }
+
+    returnToTitle() {
+        // Reset Screens
+        document.getElementById('result-screen').classList.add('hidden');
+        document.getElementById('ui-layer').classList.add('hidden');
+        document.getElementById('loading-screen').classList.add('hidden'); // Ensure loading is hidden
+        document.getElementById('title-screen').classList.remove('hidden');
+        
+        // Reset Menus
+        document.getElementById('song-select-area').classList.add('hidden');
+        document.getElementById('main-menu-buttons').classList.remove('hidden');
+        document.getElementById('collab-info').classList.add('hidden');
+
+        // Clear Canvas
+        this.ctx.clearRect(0,0,this.canvas.width, this.canvas.height);
+        
+        // Reset Game Modes and Multiplayer Status
+        this.isMultiplayerMode = false;
+        if(this.mpManager) {
+            this.mpManager.cancelWaiting(); // IMPORTANT: Resets IDLE and Buttons
+        }
+        
+        // Fix: Force hide opponent container just in case
+        document.getElementById('opponent-score-container').classList.add('hidden');
+
+        // Explicitly Reset Button State just in case
+        const btn = document.getElementById('start-btn');
+        btn.innerText = "SELECT A SONG";
+        btn.disabled = true;
+        this.selectedSongIndex = null;
+        document.querySelectorAll('.song-item').forEach(el => el.classList.remove('selected'));
+    }
+
+    getCurrentTime() {
+        if (!player || !this.isPlaying) return 0;
+        return player.getCurrentTime();
+    }
+
+    handleInput(lane, action) {
+        const now = this.getCurrentTime();
+
+        if (action === 'down') {
+            const normalNotes = this.notes.filter(n => 
+                !n.hit && !n.missed && n.lane === lane && n.type !== 'end' && n.type !== 'long' &&
+                Math.abs(n.time - now) < GOOD_WINDOW
+            );
+            
+            normalNotes.sort((a,b) => Math.abs(a.time - now) - Math.abs(b.time - now));
+            
+            if (normalNotes.length > 0) {
+                this.judge(normalNotes[0], now);
+            }
+            
+            const longStarts = this.notes.filter(n => 
+                !n.hit && !n.missed && n.lane === lane && n.type === 'long' &&
+                Math.abs(n.time - now) < GOOD_WINDOW
+            );
+            
+            if (longStarts.length > 0) {
+                const note = longStarts[0];
+                note.holding = true;
+                this.judge(note, now);
+            }
+
+            const suspendedNotes = this.notes.filter(n => 
+                n.hit && n.type === 'long' && 
+                !n.holding && !n.finished && !n.missed &&
+                n.lane === lane && (now < n.time + n.length)
+            );
+
+            suspendedNotes.forEach(n => {
+                if (now - n.lastReleaseTime <= GAP_WINDOW) {
+                    n.holding = true;
+                }
+            });
+
+        } else if (action === 'up') {
+            if (this.laneState[lane] <= 1) { 
+                const activeLongs = this.notes.filter(n => 
+                    n.hit && n.type === 'long' && n.holding && n.lane === lane && !n.finished
+                );
+                
+                activeLongs.forEach(n => {
+                    n.holding = false;
+                    n.lastReleaseTime = now;
+                });
+            }
+        }
+    }
+
+    judge(note, now) {
+        const diff = Math.abs(note.time - now);
+        
+        let grade = 'MISS';
+        if (diff <= PERFECT_WINDOW) grade = 'PERFECT';
+        else if (diff <= GREAT_WINDOW) grade = 'GREAT';
+        else if (diff <= GOOD_WINDOW) grade = 'GOOD';
+
+        if (grade !== 'MISS') {
+            note.hit = true;
+            this.addScore(grade);
+        } else {
+            note.hit = true;
+            this.breakCombo();
+        }
+    }
+
+    addScore(grade) {
+        this.combo++;
+        if(this.combo > this.maxCombo) this.maxCombo = this.combo;
+        let val = 500;
+        if (grade === 'PERFECT') val = 1000;
+        if (grade === 'GREAT') val = 800;
+        this.score += Math.floor(val * (1 + Math.min(this.combo, 100) * 0.01));
+        
+        if (grade==='PERFECT') this.stats.perfect++;
+        else if (grade==='GREAT') this.stats.great++;
+        else this.stats.good++;
+
+        this.life = Math.min(1000, this.life + 15);
+        this.showJudge(grade);
+        this.updateHUD();
+
+        if (this.isMultiplayerMode && this.mpManager) {
+            this.mpManager.updateScore(this.score);
+        }
+    }
+
+    breakCombo() {
+        this.combo = 0;
+        this.stats.miss++;
+        this.life = Math.max(0, this.life - 50);
+        this.showJudge('MISS');
+        this.updateHUD();
+        
+        if (this.isMultiplayerMode && this.mpManager) {
+            this.mpManager.updateScore(this.score);
+        }
+    }
+
+    showJudge(text) {
+        const el = document.getElementById('judge-display');
+        el.innerText = text;
+        el.className = 'judge-' + text.toLowerCase() + ' hud-element';
+        el.style.animation = 'none';
+        el.offsetHeight; 
+        el.style.animation = 'pop 0.2s forwards';
+        el.style.opacity = 1;
+
+        const c = document.getElementById('combo-container');
+        if (this.combo > 1) {
+            document.getElementById('combo-count').innerText = this.combo;
+            c.style.display = 'block';
+            c.style.animation = 'none';
+            c.offsetHeight;
+            c.style.animation = 'bump 0.1s';
+        } else {
+            c.style.display = 'none';
+        }
+    }
+
+    updateHUD() {
+        document.getElementById('score-val').innerText = this.score;
+        const bar = document.getElementById('life-bar');
+        bar.style.width = (this.life / 10) + '%';
+        bar.style.background = this.life > 300 ? '#4caf50' : '#f44336';
+    }
+
+    finishGame() {
+        if (!this.isPlaying) return;
+        this.isPlaying = false;
+        if (player) player.pauseVideo();
+        document.getElementById('ui-layer').classList.add('hidden');
+        document.getElementById('result-screen').classList.remove('hidden');
+        
+        const title = this.stats.miss === 0 ? "FULL COMBO!" : "FINISH";
+        document.getElementById('res-title').innerText = title;
+        document.getElementById('result-score').innerText = this.score;
+        document.getElementById('result-combo').innerText = this.maxCombo;
+        document.getElementById('res-perf').innerText = this.stats.perfect;
+        document.getElementById('res-great').innerText = this.stats.great;
+        document.getElementById('res-good').innerText = this.stats.good;
+        document.getElementById('res-miss').innerText = this.stats.miss;
+
+        const collabArea = document.getElementById('collab-result-area');
+        if (this.isMultiplayerMode) {
+            collabArea.style.display = 'block';
+            document.getElementById('my-final-score').innerText = this.score;
+            document.getElementById('op-final-score').innerText = this.mpManager.opponentScore;
+            
+            const winText = document.getElementById('win-lose-text');
+            if (this.score > this.mpManager.opponentScore) {
+                winText.innerText = "WIN!";
+                winText.style.color = "#39c5bb";
+            } else if (this.score < this.mpManager.opponentScore) {
+                winText.innerText = "LOSE...";
+                winText.style.color = "#ff0055";
+            } else {
+                winText.innerText = "DRAW";
+                winText.style.color = "#fff";
+            }
+            this.mpManager.cancelWaiting();
+        } else {
+            collabArea.style.display = 'none';
+        }
+    }
+
+    loop() {
+        if (!this.isPlaying) return;
+        requestAnimationFrame(() => this.loop());
+
+        const now = this.getCurrentTime();
+        this.ctx.clearRect(0,0, this.canvas.width, this.canvas.height);
+
+        const w = this.canvas.width;
+        const h = this.canvas.height;
+        const { x: trackX, w: trackW, laneW } = this.trackDims;
+
+        const project = (laneX, timeDiff) => {
+            const speedFactor = this.noteSpeed / 2.0;
+            const zDepth = 1 + (timeDiff * speedFactor); 
+
+            if (zDepth < 0.1) return null;
+            const scale = 1 / zDepth;
+            const vpY = h * 0.15; 
+            const playerY = h * 0.90;
+            const trackScreenHeight = playerY - vpY;
+            const y = vpY + (trackScreenHeight * scale);
+            const centerX = w / 2;
+            const x = centerX + (laneX - centerX) * scale;
+            return { x, y, scale };
+        };
+
+        const btmL = project(trackX, 0);
+        const btmR = project(trackX + trackW, 0);
+        const topL = project(trackX, 100); 
+        const topR = project(trackX + trackW, 100);
+        
+        const grad = this.ctx.createLinearGradient(0, topL.y, 0, btmL.y);
+        grad.addColorStop(0, 'rgba(0,0,0,0)');
+        grad.addColorStop(1, 'rgba(0, 20, 30, 0.8)');
+        this.ctx.fillStyle = grad;
+        
+        this.ctx.beginPath();
+        this.ctx.moveTo(btmL.x, btmL.y);
+        this.ctx.lineTo(btmR.x, btmR.y);
+        this.ctx.lineTo(topR.x, topR.y);
+        this.ctx.lineTo(topL.x, topL.y);
+        this.ctx.fill();
+
+        this.ctx.strokeStyle = 'rgba(57, 197, 187, 0.3)';
+        this.ctx.lineWidth = 2;
+        for(let i=0; i<=LANES; i++) {
+            const p1 = project(trackX + i*laneW, 0);
+            const p2 = project(trackX + i*laneW, 100);
+            this.ctx.beginPath();
+            this.ctx.moveTo(p1.x, p1.y);
+            this.ctx.lineTo(p2.x, p2.y);
+            this.ctx.stroke();
+        }
+
+        this.ctx.strokeStyle = '#fff';
+        this.ctx.lineWidth = 4;
+        this.ctx.beginPath();
+        this.ctx.moveTo(btmL.x, btmL.y);
+        this.ctx.lineTo(btmR.x, btmR.y);
+        this.ctx.stroke();
+
+        for(let i=0; i<LANES; i++) {
+            if(this.laneState[i] > 0) {
+                const p1 = project(trackX + i*laneW, 0);
+                const p2 = project(trackX + (i+1)*laneW, 0);
+                const p3 = project(trackX + i*laneW, 0.5); 
+                
+                const fGrad = this.ctx.createLinearGradient(0, p3.y, 0, p1.y);
+                fGrad.addColorStop(0, 'rgba(255, 0, 85, 0.0)');
+                fGrad.addColorStop(1, 'rgba(255, 0, 85, 0.6)');
+                this.ctx.fillStyle = fGrad;
+                
+                const beamTopL = project(trackX + i*laneW, 0.5);
+                const beamTopR = project(trackX + (i+1)*laneW, 0.5);
+                
+                this.ctx.beginPath();
+                this.ctx.moveTo(p1.x, p1.y);
+                this.ctx.lineTo(p2.x, p2.y);
+                this.ctx.lineTo(beamTopR.x, beamTopR.y);
+                this.ctx.lineTo(beamTopL.x, beamTopL.y);
+                this.ctx.fill();
+            }
+        }
+
+        this.notes.forEach(note => {
+            if (note.type === 'long' && note.hit && !note.finished && !note.missed) {
+                const endTime = note.time + note.length;
+
+                if (now >= endTime) {
+                    note.finished = true;
+                    this.addScore('PERFECT');
+                    return; 
+                }
+
+                if (!note.holding) {
+                    if (now - note.lastReleaseTime > GAP_WINDOW) {
+                        this.breakCombo();
+                        note.missed = true;
+                        note.finished = true;
+                        return;
+                    }
+                }
+            }
+
+            if (note.finished || note.missed) return;
+            if (note.hit && note.type !== 'long') return;
+            
+            const dt = note.time - now;
+            if (dt > 10.0 / (this.noteSpeed/2)) return; 
+            
+            if (dt < -0.2 && note.type !== 'long') {
+                if(!note.hit) { note.hit = true; note.missed = true; this.breakCombo(); }
+                return;
+            }
+            if (note.type === 'end' && dt < 0) { this.finishGame(); return; }
+            if (note.type === 'end') return;
+
+            const laneX = trackX + note.lane * laneW;
+
+            if (note.type === 'long') {
+                const dtTail = (note.time + note.length) - now;
+                if (dtTail < 0) return; 
+
+                const effDt = (note.hit) ? 0 : Math.max(0, dt);
+                
+                const headP = project(laneX, effDt);
+                const headPR = project(laneX + laneW, effDt);
+                const tailP = project(laneX, dtTail);
+                const tailPR = project(laneX + laneW, dtTail);
+
+                if (headP && tailP) {
+                    if (note.hit && !note.holding) {
+                        this.ctx.fillStyle = 'rgba(255, 100, 100, 0.6)'; 
+                    } else {
+                        this.ctx.fillStyle = 'rgba(57, 197, 187, 0.7)';
+                    }
+                    
+                    this.ctx.beginPath();
+                    this.ctx.moveTo(headP.x, headP.y);
+                    this.ctx.lineTo(headPR.x, headPR.y);
+                    this.ctx.lineTo(tailPR.x, tailPR.y);
+                    this.ctx.lineTo(tailP.x, tailP.y);
+                    this.ctx.fill();
+                }
+            }
+
+            if (!note.hit) {
+                const renderDt = dt;
+                if (renderDt < -0.1) return;
+
+                const p = project(laneX, renderDt);
+                const pR = project(laneX + laneW, renderDt);
+                
+                if (p && pR) {
+                    const wNote = pR.x - p.x;
+                    const hNote = 20 * p.scale; 
+
+                    if (note.type === 'flick') this.ctx.fillStyle = '#ff0055';
+                    else if (note.type === 'long') this.ctx.fillStyle = '#ffeb3b';
+                    else this.ctx.fillStyle = '#39c5bb';
+
+                    this.ctx.fillRect(p.x + 1, p.y - hNote/2, wNote - 2, hNote);
+                    this.ctx.fillStyle = '#fff';
+                    this.ctx.fillRect(p.x + 3, p.y - hNote/4, wNote - 6, hNote/2);
+
+                    if (note.type === 'flick') {
+                        this.ctx.fillStyle = '#ff0055';
+                        this.ctx.beginPath();
+                        this.ctx.moveTo(p.x + wNote/2, p.y - hNote);
+                        this.ctx.lineTo(p.x + wNote/2 - 15*p.scale, p.y - hNote/2);
+                        this.ctx.lineTo(p.x + wNote/2 + 15*p.scale, p.y - hNote/2);
+                        this.ctx.fill();
+                    }
+                }
+            }
+        });
+    }
+}
+
+game = new RhythmGame();
+game.fetchSongList();
+
+const styleSheet = document.createElement("style");
+styleSheet.innerText = `
+@keyframes pop { 0% { transform: translate(-50%, -50%) scale(0.5); opacity: 0; } 50% { transform: translate(-50%, -50%) scale(1.3); opacity: 1; } 100% { transform: translate(-50%, -50%) scale(1.0); opacity: 0; } }
+@keyframes bump { 0% { transform: translate(-50%, -50%) scale(1); } 50% { transform: translate(-50%, -50%) scale(1.2); } 100% { transform: translate(-50%, -50%) scale(1); } }
+`;
+document.head.appendChild(styleSheet);
+</script>
+</body>
+</html>
