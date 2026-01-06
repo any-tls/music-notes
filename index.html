@@ -12,6 +12,7 @@
             --accent: #ff0055;
             --bg: #121212;
             --text: #ffffff;
+            --opponent: #ff9900;
         }
 
         * {
@@ -107,6 +108,16 @@
             transition: width 0.2s, background 0.2s;
         }
 
+        /* Multiplayer Opponent Score Bar */
+        #opponent-score-container {
+            top: 45px; left: 20px;
+            width: 250px;
+            font-size: 0.8rem;
+            color: var(--opponent);
+            text-align: left;
+            text-shadow: 1px 1px 0 #000;
+        }
+
         #score-display {
             top: 15px; right: 20px;
             font-size: 1.8rem;
@@ -116,7 +127,7 @@
         }
 
         #btn-quit {
-            top: 50px; left: 20px;
+            top: 80px; left: 20px;
             background: rgba(255, 50, 50, 0.8);
             border: 1px solid #fff;
             color: white;
@@ -229,6 +240,11 @@
         }
         .btn:active { transform: scale(0.95); }
         .btn:disabled { background: #555; box-shadow: none; cursor: not-allowed; opacity: 0.7; }
+        
+        .btn-collab {
+            background: linear-gradient(45deg, var(--opponent), #d35400);
+            box-shadow: 0 0 15px var(--opponent);
+        }
 
         .settings-group {
             background: rgba(255,255,255,0.1);
@@ -290,7 +306,8 @@
         }
 
         #song-list-scroll {
-            max-height: 150px;
+            /* Changed from 150px to 320px for ~8 songs */
+            max-height: 320px;
             overflow-y: auto;
             border: 1px solid #444;
             border-radius: 5px;
@@ -330,14 +347,76 @@
         
         #loading-message { font-size: 1.2rem; color: var(--primary); animation: blink 1s infinite; }
         @keyframes blink { 50% { opacity: 0.5; } }
+
+        /* --- COLLAB LOBBY STYLE --- */
+        .lobby-status {
+            color: var(--opponent);
+            font-weight: bold;
+            margin-bottom: 10px;
+            font-size: 1.2rem;
+        }
+        #lobby-list {
+            width: 100%;
+            background: rgba(0,0,0,0.6);
+            border: 1px solid var(--opponent);
+            border-radius: 5px;
+            padding: 10px;
+            max-height: 250px;
+            overflow-y: auto;
+            text-align: left;
+            margin-bottom: 15px;
+        }
+        
+        .lobby-user {
+            padding: 8px;
+            border-bottom: 1px solid #444;
+            font-size: 0.9rem;
+            cursor: pointer;
+            transition: background 0.2s;
+            border-radius: 4px;
+            margin-bottom: 4px;
+        }
+        .lobby-user:hover {
+            background: rgba(255, 153, 0, 0.1);
+        }
+        .lobby-user.matched {
+            background: rgba(255, 153, 0, 0.3);
+            color: #fff;
+            cursor: default;
+        }
+        
+        .lobby-user-header {
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+        }
+        .lobby-song-info {
+            font-size: 0.8rem;
+            color: #aaa;
+            margin-top: 3px;
+            padding-left: 5px;
+            border-left: 2px solid var(--primary);
+        }
+        .lobby-join-hint {
+            font-size: 0.75rem;
+            color: var(--primary);
+            font-weight: bold;
+            display: none;
+        }
+        .lobby-user:hover .lobby-join-hint {
+            display: inline;
+        }
+
+        .status-badge {
+            font-size: 0.75rem;
+            padding: 2px 6px;
+            border-radius: 4px;
+            background: #444;
+        }
+        .status-waiting { background: #2a9d8f; color: white; }
+        .status-playing { background: #e91e63; color: white; }
     </style>
-    <script async src="https://www.googletagmanager.com/gtag/js?id=G-RV7D701RFJ"></script>
-    <script>
-      window.dataLayer = window.dataLayer || [];
-      function gtag(){dataLayer.push(arguments);}
-      gtag('js', new Date());
-      gtag('config', 'G-RV7D701RFJ');
-    </script>
+    <script>window.dataLayer = window.dataLayer || []; function gtag(){dataLayer.push(arguments);} gtag('js', new Date());</script>
 </head>
 <body>
 
@@ -352,6 +431,9 @@
 
     <div id="ui-layer" class="hidden">
         <div id="life-container" class="hud-element"><div id="life-bar"></div></div>
+        <div id="opponent-score-container" class="hud-element hidden">
+            VS: <span id="opponent-name-hud">Opponent</span> - <span id="opponent-score-val">0</span>
+        </div>
         <button id="btn-quit" class="hud-element">QUIT</button>
         <div id="score-display" class="hud-element">SCORE: <span id="score-val">0</span></div>
         <div id="combo-container" class="hud-element">
@@ -371,36 +453,53 @@
                 <div id="loading-message">Loading Song List...</div>
                 
                 <div class="settings-group hidden" id="menu-content">
-                    <div style="grid-column: 1 / -1;">
-                        <label>SELECT SONG</label>
-                        <div id="search-container">
-                            <input type="text" id="song-search" placeholder="Type to search..." autocomplete="off">
-                            <div id="song-list-scroll">
+                    <div id="main-menu-buttons">
+                        <button id="btn-solo" class="btn">SOLO PLAY</button>
+                        <button id="btn-collab" class="btn btn-collab">COLLAB MODE</button>
+                    </div>
+
+                    <div id="song-select-area" class="hidden">
+                         <div id="collab-info" class="hidden">
+                            <div class="lobby-status">COLLAB LOBBY</div>
+                            <input type="text" id="player-name" placeholder="Enter Your Name" maxlength="10" value="Guest">
+                            <div style="font-size:0.8rem; margin:5px 0;">Select a song or click a player to join</div>
+                            <div id="lobby-list">
+                                <div style="color:#888; text-align:center;">Looking for players...</div>
+                            </div>
+                         </div>
+
+                        <div style="grid-column: 1 / -1;">
+                            <label>SELECT SONG</label>
+                            <div id="search-container">
+                                <input type="text" id="song-search" placeholder="Type to search..." autocomplete="off">
+                                <div id="song-list-scroll">
                                 </div>
+                            </div>
                         </div>
+                        <div>
+                            <label>DIFFICULTY</label>
+                            <select id="diff-select">
+                                <option value="0">EASY</option>
+                                <option value="1">NORMAL</option>
+                                <option value="2">HARD</option>
+                                <option value="3">EXPERT</option>
+                                <option value="4">MASTER</option>
+                            </select>
+                        </div>
+                        <div>
+                            <label>SPEED: <span id="speed-val">12.0</span></label>
+                            <input type="range" id="speed-range" min="1" max="15" step="0.5" value="12.0">
+                        </div>
+                        <button id="start-btn" class="btn" disabled>SELECT A SONG</button>
+                        <button id="back-btn" class="btn" style="background:transparent; border:1px solid #aaa; font-size:0.9rem; padding:10px 20px; margin-top:5px;">BACK</button>
                     </div>
-                    <div>
-                        <label>DIFFICULTY</label>
-                        <select id="diff-select">
-                            <option value="0">EASY</option>
-                            <option value="1">NORMAL</option>
-                            <option value="2">HARD</option>
-                            <option value="3">EXPERT</option>
-                            <option value="4">MASTER</option>
-                        </select>
-                    </div>
-                    <div>
-                        <label>SPEED: <span id="speed-val">12.0</span></label>
-                        <input type="range" id="speed-range" min="1" max="15" step="0.5" value="12.0">
-                    </div>
-                    <button id="start-btn" class="btn" disabled>SELECT A SONG</button>
                 </div>
                     <div class="footer-container">
                         <a href="https://x.com/TanukiYy" target="_blank" class="btn btn-footer">作者X</a>
-                        <a href="https://forms.gle/sM3ctNs1gpm1eiBBA" target="_blank" class="btn btn-footer">曲のリクエストやバグ報告、お問い合わせなど</a>
+                        <a href="https://forms.gle/sM3ctNs1gpm1eiBBA" target="_blank" class="btn btn-footer">曲のリクエストやバグ報告</a>
                     </div>
                 <div class="footer-container2">
-                        <p>音源や映像はすべてYouTubeから埋め込まれています。<br>当サイトは非公式ファンサイトです。</p>
+                        <p>音源や映像はYouTube埋め込みです。<br>非公式ファンサイト。</p>
                 </div>
             </div>
         </div>
@@ -408,12 +507,22 @@
         <div id="loading-screen" class="screen hidden">
             <div class="screen-content">
                 <h2>LOADING DATA...</h2>
+                <div id="match-status" style="margin-top:20px; color:var(--opponent); display:none;">OPPONENT FOUND! STARTING...</div>
             </div>
         </div>
 
         <div id="result-screen" class="screen hidden">
             <div class="screen-content">
                 <h2 id="res-title" style="font-size:3rem; margin-bottom:10px;">FULL COMBO!</h2>
+                
+                <div id="collab-result-area" style="display:none; margin-bottom:20px; padding:20px; background:rgba(255,153,0,0.1); border:2px solid var(--opponent); border-radius:10px;">
+                    <h3 id="win-lose-text" style="font-size:2.5rem; margin:0;">WIN</h3>
+                    <div style="display:flex; gap:20px; justify-content:center; margin-top:10px;">
+                        <div>YOU: <span id="my-final-score">0</span></div>
+                        <div>VS: <span id="op-final-score">0</span></div>
+                    </div>
+                </div>
+
                 <div style="font-size:1.5rem;">SCORE: <span id="result-score">0</span></div>
                 <div style="font-size:1.2rem; margin:10px;">MAX COMBO: <span id="result-combo">0</span></div>
                 <div style="display:grid; grid-template-columns: 1fr 1fr; gap:15px; text-align:left; margin:20px; background:rgba(255,255,255,0.1); padding:20px; border-radius:10px;">
@@ -427,10 +536,11 @@
         </div>
     </div>
 
+<script src="https://unpkg.com/mqtt/dist/mqtt.min.js"></script>
+
 <script>
-/**
- * AI RHYTHM GAME - Touch Stuck Fix
- */
+// Initialize Game Global
+let game;
 
 // --- Constants ---
 const LANES = 4;
@@ -438,6 +548,7 @@ const PERFECT_WINDOW = 0.050;
 const GREAT_WINDOW = 0.100;
 const GOOD_WINDOW = 0.150;
 const GAP_WINDOW = 0.150; 
+const DIFF_NAMES = ["EASY", "NORMAL", "HARD", "EXPERT", "MASTER"];
 
 // --- YouTube API Setup ---
 let player;
@@ -449,14 +560,9 @@ function onYouTubeIframeAPIReady() {
         width: '100%',
         videoId: '', 
         playerVars: {
-            'autoplay': 0,
-            'controls': 0,      
-            'disablekb': 1,     
-            'fs': 0,            
-            'iv_load_policy': 3,
-            'modestbranding': 1,
-            'rel': 0,           
-            'playsinline': 1    
+            'autoplay': 0, 'controls': 0, 'disablekb': 1,     
+            'fs': 0, 'iv_load_policy': 3, 'modestbranding': 1,
+            'rel': 0, 'playsinline': 1    
         },
         events: {
             'onReady': onPlayerReady,
@@ -471,7 +577,8 @@ function onPlayerReady(event) {
 }
 
 function onPlayerStateChange(event) {
-    if (event.data === YT.PlayerState.ENDED && game.isPlaying) {
+    // Only finish game if we are actively playing
+    if (event.data === YT.PlayerState.ENDED && game && game.isPlaying) {
         game.finishGame();
     }
 }
@@ -483,27 +590,274 @@ const firstScriptTag = document.getElementsByTagName('script')[0];
 firstScriptTag.parentNode.insertBefore(tag, firstScriptTag);
 
 
+// --- Multiplayer Manager (MQTT Version) ---
+class MultiplayerManager {
+    constructor() {
+        this.client = null;
+        // Public Free Broker
+        this.brokerUrl = 'wss://broker.emqx.io:8084/mqtt';
+        this.topic = 'holo-rhythm-game-2025/global';
+        
+        this.myId = 'user-' + Math.floor(Math.random() * 100000);
+        this.myName = "Guest" + Math.floor(Math.random() * 1000);
+        
+        // Internal State
+        this.myStatus = 'IDLE'; // IDLE, WAITING, PLAYING
+        this.currentSongIndex = -1;
+        this.currentDiff = 1;
+        this.currentScore = 0;
+        
+        // Peers List: Map<id, {data, timestamp}>
+        this.peers = new Map();
+        
+        // Opponent Info
+        this.opponentId = null;
+        this.opponentName = "";
+        this.opponentScore = 0;
+        
+        this.heartbeatInterval = null;
+        this.cleanupInterval = null;
+        this.connected = false;
+    }
+
+    init() {
+        if (this.connected) return;
+
+        console.log("Connecting to Free MQTT Broker...");
+        this.client = mqtt.connect(this.brokerUrl);
+
+        this.client.on('connect', () => {
+            console.log("MQTT Connected!");
+            this.connected = true;
+            this.client.subscribe(this.topic, (err) => {
+                if (!err) {
+                    console.log("Subscribed to lobby topic");
+                    this.startHeartbeat();
+                }
+            });
+        });
+
+        this.client.on('message', (topic, message) => {
+            try {
+                const data = JSON.parse(message.toString());
+                this.handleMessage(data);
+            } catch (e) {
+                // Ignore malformed messages
+            }
+        });
+
+        this.client.on('error', (err) => {
+            console.error('Connection error: ', err);
+            this.client.end();
+        });
+    }
+
+    startHeartbeat() {
+        this.heartbeatInterval = setInterval(() => {
+            if (!this.connected) return;
+            const payload = {
+                id: this.myId,
+                name: this.myName,
+                status: this.myStatus,
+                songIndex: this.currentSongIndex,
+                difficulty: this.currentDiff,
+                score: this.currentScore,
+                opponentId: this.opponentId 
+            };
+            this.client.publish(this.topic, JSON.stringify(payload));
+        }, 1000);
+
+        this.cleanupInterval = setInterval(() => {
+            const now = Date.now();
+            this.peers.forEach((val, key) => {
+                if (now - val.timestamp > 3000) {
+                    this.peers.delete(key);
+                    this.updateLobbyUI(); 
+                }
+            });
+        }, 2000);
+    }
+
+    updateMyPresence() {
+        if (this.connected) {
+            const payload = {
+                id: this.myId,
+                name: this.myName,
+                status: this.myStatus,
+                songIndex: this.currentSongIndex,
+                difficulty: this.currentDiff,
+                score: this.currentScore,
+                opponentId: this.opponentId
+            };
+            this.client.publish(this.topic, JSON.stringify(payload));
+        }
+    }
+
+    handleMessage(data) {
+        if (data.id === this.myId) return; 
+
+        this.peers.set(data.id, { data: data, timestamp: Date.now() });
+
+        if (this.myStatus === 'IDLE' || this.myStatus === 'WAITING') {
+            this.updateLobbyUI();
+        }
+
+        // Matching Logic
+        if (this.myStatus === 'WAITING' && data.status === 'WAITING') {
+            if (data.songIndex === this.currentSongIndex && data.difficulty === this.currentDiff) {
+                // Match Found!
+                this.foundMatch(data.id, data.name);
+            }
+        }
+        
+        // Opponent Score Update
+        if (this.myStatus === 'PLAYING' && data.id === this.opponentId) {
+            this.opponentScore = data.score;
+            const opScoreEl = document.getElementById('opponent-score-val');
+            if(opScoreEl) opScoreEl.innerText = this.opponentScore;
+        }
+    }
+
+    updateLobbyUI() {
+        const lobbyList = document.getElementById('lobby-list');
+        if (!lobbyList || game.isPlaying) return;
+
+        lobbyList.innerHTML = '';
+        let count = 0;
+
+        if(!game.songList || game.songList.length === 0) return;
+
+        this.peers.forEach((peer) => {
+            const state = peer.data;
+            const div = document.createElement('div');
+            div.className = 'lobby-user';
+            
+            let statusText = state.status;
+            let badgeClass = 'status-badge';
+            let extraInfo = '';
+            let canJoin = false;
+            
+            if (state.status === 'WAITING') {
+                if (state.songIndex === this.currentSongIndex && state.difficulty === this.currentDiff) {
+                    statusText = "MATCHING...";
+                    div.classList.add('matched');
+                } else {
+                    statusText = "WAITING";
+                    badgeClass += ' status-waiting';
+                    
+                    const sName = game.songList[state.songIndex] ? game.songList[state.songIndex].name : "Unknown";
+                    const dName = DIFF_NAMES[state.difficulty] || "?";
+                    
+                    extraInfo = `
+                    <div class="lobby-song-info">
+                        ${sName} [${dName}] <span class="lobby-join-hint">CLICK TO JOIN</span>
+                    </div>`;
+                    
+                    canJoin = true;
+                }
+            } else if (state.status === 'PLAYING') {
+                badgeClass += ' status-playing';
+                const sName = game.songList[state.songIndex] ? game.songList[state.songIndex].name : "Unknown";
+                extraInfo = `<div class="lobby-song-info">Playing: ${sName}</div>`;
+            } else {
+                statusText = "IDLE";
+            }
+
+            div.innerHTML = `
+                <div class="lobby-user-header">
+                    <span style="font-weight:bold;">${state.name}</span>
+                    <span class="${badgeClass}">${statusText}</span>
+                </div>
+                ${extraInfo}
+            `;
+
+            if (canJoin) {
+                div.onclick = () => {
+                    game.joinSpecificLobby(state.songIndex, state.difficulty);
+                };
+            }
+
+            lobbyList.appendChild(div);
+            count++;
+        });
+
+        if (count === 0) lobbyList.innerHTML = '<div style="color:#888; text-align:center;">No other players online.</div>';
+    }
+
+    startWaiting(songIndex, diff) {
+        this.currentSongIndex = songIndex;
+        this.currentDiff = diff;
+        this.myStatus = 'WAITING';
+        this.currentScore = 0;
+        this.opponentId = null;
+        this.updateMyPresence();
+        
+        document.getElementById('start-btn').innerText = "WAITING FOR OPPONENT...";
+        document.getElementById('start-btn').disabled = true;
+    }
+
+    cancelWaiting() {
+        this.myStatus = 'IDLE';
+        this.currentSongIndex = -1; // Reset song to avoid auto-match
+        this.updateMyPresence();
+        
+        // Reset UI immediately
+        const startBtn = document.getElementById('start-btn');
+        if(startBtn) {
+            // Check if a song is actually selected in UI to determine text
+            if(game && game.selectedSongIndex !== null) {
+                const sName = game.songList[game.selectedSongIndex].name;
+                startBtn.innerText = game.isMultiplayerMode ? "WAIT FOR OPPONENT: " + sName : "START: " + sName;
+                startBtn.disabled = false;
+            } else {
+                startBtn.innerText = "SELECT A SONG";
+                startBtn.disabled = true;
+            }
+        }
+    }
+
+    foundMatch(opponentId, opponentName) {
+        if (this.myStatus === 'PLAYING') return;
+
+        console.log("Match Found!", opponentName);
+        this.opponentId = opponentId;
+        this.opponentName = opponentName;
+        this.myStatus = 'PLAYING';
+        this.updateMyPresence(); 
+
+        game.startMultiplayerGame(opponentName);
+    }
+    
+    updateScore(score) {
+        this.currentScore = score;
+    }
+}
+
+
 // --- Game Class ---
 class RhythmGame {
     constructor() {
-        // State
+        this.isMultiplayerMode = false;
+        this.mpManager = new MultiplayerManager();
+
         this.notes = [];
         this.score = 0;
         this.combo = 0;
         this.maxCombo = 0;
         this.life = 1000;
         this.isPlaying = false;
-        this.noteSpeed = 8.0;
+        
+        // Load Speed from LocalStorage
+        const savedSpeed = localStorage.getItem('holoNoteSpeed');
+        this.noteSpeed = savedSpeed ? parseFloat(savedSpeed) : 8.0;
+
         this.difficulty = 1;
         this.stats = { perfect:0, great:0, good:0, miss:0 };
         
-        // Input
         this.keyMap = { 'KeyD':0, 'KeyF':1, 'KeyJ':2, 'KeyK':3 };
         this.laneState = [0, 0, 0, 0]; 
-        // 指IDとレーンの対応を保存するMap（スタック防止用）
         this.touchLaneMap = new Map(); 
         
-        // Canvas
         this.canvas = document.getElementById('game-layer');
         this.ctx = this.canvas.getContext('2d');
         this.trackDims = { x:0, w:0, laneW:0 };
@@ -512,19 +866,97 @@ class RhythmGame {
         window.addEventListener('resize', () => this.resize());
         this.bindInputs();
 
-        // Song Data
         this.songList = [];
         this.selectedSongIndex = null;
         this.currentSongData = null; 
         this.currentYoutubeId = "";
         
-        this.fetchSongList();
-        
-        // Search Bindings
-        document.getElementById('song-search').addEventListener('input', (e) => this.renderSongList(e.target.value));
+        this.setupUI();
     }
 
-    // --- Data Loading & Search UI ---
+    setupUI() {
+        document.getElementById('btn-solo').addEventListener('click', () => {
+            this.isMultiplayerMode = false;
+            this.showSongSelect();
+        });
+        document.getElementById('btn-collab').addEventListener('click', () => {
+            this.isMultiplayerMode = true;
+            this.mpManager.init(); 
+            document.getElementById('collab-info').classList.remove('hidden');
+            document.getElementById('player-name').value = this.mpManager.myName;
+            this.showSongSelect();
+        });
+        
+        document.getElementById('back-btn').addEventListener('click', () => {
+             document.getElementById('song-select-area').classList.add('hidden');
+             document.getElementById('main-menu-buttons').classList.remove('hidden');
+             document.getElementById('collab-info').classList.add('hidden');
+             if(this.isMultiplayerMode) this.mpManager.cancelWaiting();
+        });
+        
+        document.getElementById('player-name').addEventListener('input', (e) => {
+            if(this.mpManager) {
+                this.mpManager.myName = e.target.value || "Guest";
+                this.mpManager.updateMyPresence();
+            }
+        });
+
+        document.getElementById('song-search').addEventListener('input', (e) => this.renderSongList(e.target.value));
+        
+        // Speed Slider Setup (Initialize with saved value)
+        const speedRange = document.getElementById('speed-range');
+        const speedVal = document.getElementById('speed-val');
+        speedRange.value = this.noteSpeed;
+        speedVal.innerText = this.noteSpeed.toFixed(1);
+
+        speedRange.addEventListener('input', (e) => {
+            const val = parseFloat(e.target.value);
+            speedVal.innerText = val.toFixed(1);
+            this.noteSpeed = val;
+            // Save to LocalStorage
+            localStorage.setItem('holoNoteSpeed', val);
+        });
+
+        document.getElementById('diff-select').addEventListener('change', (e) => this.difficulty = parseInt(e.target.value));
+
+        document.getElementById('start-btn').addEventListener('click', () => {
+            if (this.selectedSongIndex === null) return;
+            
+            if (this.isMultiplayerMode) {
+                this.mpManager.startWaiting(this.songList[this.selectedSongIndex].originalIndex, this.difficulty);
+            } else {
+                this.loadSelectedSong();
+            }
+        });
+
+        document.getElementById('btn-quit').addEventListener('click', () => this.stopGame());
+    }
+
+    showSongSelect() {
+        document.getElementById('main-menu-buttons').classList.add('hidden');
+        document.getElementById('song-select-area').classList.remove('hidden');
+        this.renderSongList("");
+    }
+    
+    joinSpecificLobby(songIdx, diff) {
+        if (!this.isMultiplayerMode) return;
+        
+        // 1. Force Local State Update First
+        this.selectedSongIndex = songIdx;
+        this.difficulty = diff;
+        
+        // 2. Update UI Elements
+        document.getElementById('diff-select').value = diff;
+        this.renderSongList(""); 
+
+        const songName = this.songList[songIdx].name;
+        document.getElementById('start-btn').innerText = "JOINING: " + songName + "...";
+        document.getElementById('start-btn').disabled = true;
+        
+        // 3. Enter Waiting Mode (Triggers Match)
+        this.mpManager.startWaiting(songIdx, diff);
+    }
+
     async fetchSongList() {
         try {
             const response = await fetch('./notes/note_list.txt');
@@ -548,7 +980,6 @@ class RhythmGame {
             
             document.getElementById('loading-message').style.display = 'none';
             document.getElementById('menu-content').classList.remove('hidden');
-            this.renderSongList("");
 
         } catch (e) {
             document.getElementById('loading-message').innerText = "ERROR: Could not load note_list.txt";
@@ -590,7 +1021,17 @@ class RhythmGame {
                 document.querySelectorAll('.song-item').forEach(el => el.classList.remove('selected'));
                 div.classList.add('selected');
                 startBtn.disabled = false;
-                startBtn.innerText = "START: " + song.name;
+                
+                if (this.isMultiplayerMode) {
+                    startBtn.innerText = "WAIT FOR OPPONENT: " + song.name;
+                } else {
+                    startBtn.innerText = "START: " + song.name;
+                }
+                
+                if(this.mpManager.myStatus === 'WAITING') {
+                    this.mpManager.cancelWaiting();
+                    startBtn.innerText = "WAIT FOR OPPONENT: " + song.name;
+                }
             });
             
             listContainer.appendChild(div);
@@ -615,7 +1056,7 @@ class RhythmGame {
             
             if (!chartData || chartData.length === 0) {
                 alert("This difficulty does not exist for this song.");
-                this.returnToTitle();
+                this.returnToTitle(); // Safe exit
                 return;
             }
 
@@ -626,18 +1067,45 @@ class RhythmGame {
                 n.finished = false; 
             });
             
+            // Check Player Readiness
             if (isYoutubeReady && player) {
                 player.cueVideoById(this.currentYoutubeId);
-                setTimeout(() => this.startGame(), 1000);
+                // Slightly increased buffer and error check
+                setTimeout(() => {
+                   if (player && typeof player.playVideo === 'function') {
+                       this.startGame();
+                   } else {
+                       // Fail safe if player crashed
+                       alert("Video Player Error. Please try again.");
+                       this.returnToTitle();
+                   }
+                }, 2000);
             } else {
-                alert("YouTube Player not ready.");
+                alert("YouTube Player not ready. Please refresh.");
                 this.returnToTitle();
             }
 
         } catch (e) {
             alert("Error loading chart data: " + e.message);
+            console.error(e);
             this.returnToTitle();
         }
+    }
+
+    startMultiplayerGame(opponentName) {
+        document.getElementById('match-status').style.display = 'block';
+        document.getElementById('match-status').innerText = `VS ${opponentName}! STARTING...`;
+        
+        // Show Loading Screen
+        document.getElementById('title-screen').classList.add('hidden');
+        document.getElementById('loading-screen').classList.remove('hidden');
+
+        // Load data normally
+        this.loadSelectedSong().then(() => {
+            document.getElementById('opponent-score-container').classList.remove('hidden');
+            document.getElementById('opponent-name-hud').innerText = opponentName;
+            document.getElementById('opponent-score-val').innerText = "0";
+        });
     }
 
     // --- Game Logic ---
@@ -651,7 +1119,6 @@ class RhythmGame {
     }
 
     bindInputs() {
-        // Keyboard
         window.addEventListener('keydown', (e) => {
             if (!this.isPlaying || e.repeat) return;
             if (e.code === 'Escape') this.stopGame();
@@ -670,7 +1137,6 @@ class RhythmGame {
             }
         });
 
-        // Touch Input (Fixed Logic)
         this.canvas.addEventListener('touchstart', (e) => {
             e.preventDefault();
             if (!this.isPlaying) return;
@@ -679,31 +1145,24 @@ class RhythmGame {
                 const t = e.changedTouches[i];
                 const lane = this.getLaneFromX(t.clientX);
                 if (lane !== -1) {
-                    // タッチIDとレーンを紐付け
                     this.touchLaneMap.set(t.identifier, lane);
-                    
                     this.handleInput(lane, 'down');
                     this.laneState[lane]++; 
                 }
             }
         }, { passive: false });
 
-        // Touchend / Cancel 共通処理
         const handleTouchEnd = (e) => {
             e.preventDefault();
             if (!this.isPlaying) return;
             
             for (let i = 0; i < e.changedTouches.length; i++) {
                 const t = e.changedTouches[i];
-                // 離した指のIDが、どのレーンで登録されていたかを確認
-                const registeredLane = this.touchLaneMap.get(t.identifier);
+                const lane = this.touchLaneMap.get(t.identifier);
 
-                if (registeredLane !== undefined) {
-                    // 登録されていたレーンに対してOFF処理を行う（指が画面外にあっても正しく処理される）
-                    this.handleInput(registeredLane, 'up');
-                    this.laneState[registeredLane] = Math.max(0, this.laneState[registeredLane] - 1);
-                    
-                    // マップから削除
+                if (lane !== undefined) {
+                    this.handleInput(lane, 'up');
+                    this.laneState[lane] = Math.max(0, this.laneState[lane] - 1);
                     this.touchLaneMap.delete(t.identifier);
                 }
             }
@@ -711,8 +1170,6 @@ class RhythmGame {
 
         this.canvas.addEventListener('touchend', handleTouchEnd);
         this.canvas.addEventListener('touchcancel', handleTouchEnd);
-
-        document.getElementById('btn-quit').addEventListener('click', () => this.stopGame());
     }
 
     getLaneFromX(x) {
@@ -721,16 +1178,29 @@ class RhythmGame {
     }
 
     startGame() {
+        // Double check strict visibility
         document.getElementById('loading-screen').classList.add('hidden');
+        document.getElementById('match-status').style.display = 'none';
         document.getElementById('ui-layer').classList.remove('hidden');
         
+        // Reset Logic
         this.score = 0;
         this.combo = 0;
         this.life = 1000;
         this.stats = { perfect:0, great:0, good:0, miss:0 };
-        // 状態の完全リセット
         this.laneState = [0, 0, 0, 0];
         this.touchLaneMap.clear();
+
+        // FIX: Explicitly Reset UI Elements for Combo
+        document.getElementById('combo-count').innerText = "0";
+        document.getElementById('combo-container').style.display = 'none';
+        
+        // FIX: Ensure Opponent UI is hidden for Solo
+        if (!this.isMultiplayerMode) {
+            document.getElementById('opponent-score-container').classList.add('hidden');
+            document.getElementById('opponent-name-hud').innerText = "";
+            document.getElementById('opponent-score-val').innerText = "0";
+        }
 
         this.updateHUD();
 
@@ -744,14 +1214,43 @@ class RhythmGame {
         if (player && typeof player.pauseVideo === 'function') {
             player.pauseVideo();
         }
+        if (this.isMultiplayerMode) {
+             this.mpManager.cancelWaiting();
+             document.getElementById('opponent-score-container').classList.add('hidden');
+        }
         this.returnToTitle();
     }
 
     returnToTitle() {
+        // Reset Screens
         document.getElementById('result-screen').classList.add('hidden');
         document.getElementById('ui-layer').classList.add('hidden');
+        document.getElementById('loading-screen').classList.add('hidden'); // Ensure loading is hidden
         document.getElementById('title-screen').classList.remove('hidden');
+        
+        // Reset Menus
+        document.getElementById('song-select-area').classList.add('hidden');
+        document.getElementById('main-menu-buttons').classList.remove('hidden');
+        document.getElementById('collab-info').classList.add('hidden');
+
+        // Clear Canvas
         this.ctx.clearRect(0,0,this.canvas.width, this.canvas.height);
+        
+        // Reset Game Modes and Multiplayer Status
+        this.isMultiplayerMode = false;
+        if(this.mpManager) {
+            this.mpManager.cancelWaiting(); // IMPORTANT: Resets IDLE and Buttons
+        }
+        
+        // Fix: Force hide opponent container just in case
+        document.getElementById('opponent-score-container').classList.add('hidden');
+
+        // Explicitly Reset Button State just in case
+        const btn = document.getElementById('start-btn');
+        btn.innerText = "SELECT A SONG";
+        btn.disabled = true;
+        this.selectedSongIndex = null;
+        document.querySelectorAll('.song-item').forEach(el => el.classList.remove('selected'));
     }
 
     getCurrentTime() {
@@ -798,8 +1297,6 @@ class RhythmGame {
             });
 
         } else if (action === 'up') {
-            // laneStateはここでチェックする（デクリメントされる前の値を見る）
-            // 2本以上の指で押している場合、1本離しても離したことにはしない
             if (this.laneState[lane] <= 1) { 
                 const activeLongs = this.notes.filter(n => 
                     n.hit && n.type === 'long' && n.holding && n.lane === lane && !n.finished
@@ -845,6 +1342,10 @@ class RhythmGame {
         this.life = Math.min(1000, this.life + 15);
         this.showJudge(grade);
         this.updateHUD();
+
+        if (this.isMultiplayerMode && this.mpManager) {
+            this.mpManager.updateScore(this.score);
+        }
     }
 
     breakCombo() {
@@ -853,6 +1354,10 @@ class RhythmGame {
         this.life = Math.max(0, this.life - 50);
         this.showJudge('MISS');
         this.updateHUD();
+        
+        if (this.isMultiplayerMode && this.mpManager) {
+            this.mpManager.updateScore(this.score);
+        }
     }
 
     showJudge(text) {
@@ -898,6 +1403,28 @@ class RhythmGame {
         document.getElementById('res-great').innerText = this.stats.great;
         document.getElementById('res-good').innerText = this.stats.good;
         document.getElementById('res-miss').innerText = this.stats.miss;
+
+        const collabArea = document.getElementById('collab-result-area');
+        if (this.isMultiplayerMode) {
+            collabArea.style.display = 'block';
+            document.getElementById('my-final-score').innerText = this.score;
+            document.getElementById('op-final-score').innerText = this.mpManager.opponentScore;
+            
+            const winText = document.getElementById('win-lose-text');
+            if (this.score > this.mpManager.opponentScore) {
+                winText.innerText = "WIN!";
+                winText.style.color = "#39c5bb";
+            } else if (this.score < this.mpManager.opponentScore) {
+                winText.innerText = "LOSE...";
+                winText.style.color = "#ff0055";
+            } else {
+                winText.innerText = "DRAW";
+                winText.style.color = "#fff";
+            }
+            this.mpManager.cancelWaiting();
+        } else {
+            collabArea.style.display = 'none';
+        }
     }
 
     loop() {
@@ -926,7 +1453,6 @@ class RhythmGame {
             return { x, y, scale };
         };
 
-        // Track Background
         const btmL = project(trackX, 0);
         const btmR = project(trackX + trackW, 0);
         const topL = project(trackX, 100); 
@@ -944,7 +1470,6 @@ class RhythmGame {
         this.ctx.lineTo(topL.x, topL.y);
         this.ctx.fill();
 
-        // Track Lines
         this.ctx.strokeStyle = 'rgba(57, 197, 187, 0.3)';
         this.ctx.lineWidth = 2;
         for(let i=0; i<=LANES; i++) {
@@ -956,7 +1481,6 @@ class RhythmGame {
             this.ctx.stroke();
         }
 
-        // Judge Line
         this.ctx.strokeStyle = '#fff';
         this.ctx.lineWidth = 4;
         this.ctx.beginPath();
@@ -964,7 +1488,6 @@ class RhythmGame {
         this.ctx.lineTo(btmR.x, btmR.y);
         this.ctx.stroke();
 
-        // Active Lane Effect
         for(let i=0; i<LANES; i++) {
             if(this.laneState[i] > 0) {
                 const p1 = project(trackX + i*laneW, 0);
@@ -1023,7 +1546,6 @@ class RhythmGame {
 
             const laneX = trackX + note.lane * laneW;
 
-            // --- ロングノーツ描画 ---
             if (note.type === 'long') {
                 const dtTail = (note.time + note.length) - now;
                 if (dtTail < 0) return; 
@@ -1037,7 +1559,7 @@ class RhythmGame {
 
                 if (headP && tailP) {
                     if (note.hit && !note.holding) {
-                        this.ctx.fillStyle = 'rgba(255, 100, 100, 0.6)'; // 離してる警告色
+                        this.ctx.fillStyle = 'rgba(255, 100, 100, 0.6)'; 
                     } else {
                         this.ctx.fillStyle = 'rgba(57, 197, 187, 0.7)';
                     }
@@ -1051,7 +1573,6 @@ class RhythmGame {
                 }
             }
 
-            // --- ノーツ頭描画 ---
             if (!note.hit) {
                 const renderDt = dt;
                 if (renderDt < -0.1) return;
@@ -1085,22 +1606,8 @@ class RhythmGame {
     }
 }
 
-// --- Initialization ---
-const game = new RhythmGame();
-
-document.getElementById('speed-range').addEventListener('input', (e) => {
-    document.getElementById('speed-val').innerText = parseFloat(e.target.value).toFixed(1);
-    game.noteSpeed = parseFloat(e.target.value);
-});
-document.getElementById('diff-select').addEventListener('change', (e) => game.difficulty = parseInt(e.target.value));
-
-document.getElementById('start-btn').addEventListener('click', () => {
-    if (game.selectedSongIndex === null) {
-        alert("Please select a song from the list.");
-        return;
-    }
-    game.loadSelectedSong();
-});
+game = new RhythmGame();
+game.fetchSongList();
 
 const styleSheet = document.createElement("style");
 styleSheet.innerText = `
